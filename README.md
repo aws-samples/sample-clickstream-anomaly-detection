@@ -1,30 +1,29 @@
-# Agentic AI Enhanced Real-Time Anomaly Detection System
+# Agentic AI Enhanced Real-Time Clickstream Anomaly Detection System
 
 ## Description
 
-This repository contains a hackathon project (hack-180) that demonstrates an AI-powered real-time health anomaly detection system. The solution combines streaming data processing with intelligent AI agents to detect health events from wearable devices and automatically route appropriate responses through proactive wellness monitoring or reactive emergency alerts.
+This repository demonstrates an AI-powered real-time clickstream anomaly detection system. The solution combines streaming data processing with intelligent AI agents to detect frontend issues from e-commerce clickstream data and automatically provide AI-generated code fixes and recommendations to developers.
 
 ### Key Features
 
-- **Real-time Health Monitoring**: Processes streaming health data from wearable IoT devices
-- **AI-Powered Decision Making**: Uses Amazon Bedrock agents with Claude 3.5 Sonnet for intelligent event analysis
-- **Dual Response Workflows**: 
-  - **Proactive**: Wellness advisories and preventive care recommendations
-  - **Reactive**: Emergency alerts for critical health events and safety concerns
-- **Smart Routing**: Automatically determines response type based on event severity and description content
-- **Multi-Channel Notifications**: Sends alerts to emergency services, caregivers, and healthcare providers via SNS
-- **Scalable Architecture**: Built on AWS serverless technologies (Lambda, MSK, Bedrock)
+- **Real-time Clickstream Monitoring**: Processes streaming clickstream data from e-commerce frontend applications
+- **AI-Powered Decision Making**: Uses Amazon Bedrock agents with Claude 3.7 Sonnet for intelligent anomaly analysis
+- **Frontend Issue Detection**: Identifies race conditions, sequence gaps, and logical violations in user interactions
+- **Smart Developer Assistance**: 
+  - **Code Generation**: AI-generated fixes for detected frontend issues
+  - **Best Practices**: Recommendations for preventing similar issues
+- **Intelligent Routing**: Automatically determines issue severity and routes to appropriate developer notification channels
+- **Multi-Channel Notifications**: Sends alerts to development teams, DevOps, and product managers via SNS
+- **Scalable Architecture**: Built on AWS serverless technologies (AWS Lambda,Amazon MSK,Amazon Bedrock,Managed Apache Flink)
 
 ## Prerequisites
 
 ### AWS Account Setup
 1. **Bedrock Model Access**: Enable the following models in your AWS Bedrock console:
-   - **Claude 3.5 Sonnet V2** (for agent decision making)
-   - **Amazon Nova Micro** (for action group processing)
+   - **Claude 3.7 Sonnet V2** (for anomaly analysis and code generation)
 2. **IAM Permissions**: Ensure your AWS user/role has permissions for:
    - Bedrock (agent creation and model invocation)
-   - Lambda, SNS, KMS, CloudFormation
-   - MSK cluster creation and access
+   - Running the CloudFormation which creates resources in your account including Amazon MSK, and a Managed Apache Flink cluster.
 
 ### Development Environment (for manual setup only)
 - Python 3.11+
@@ -42,10 +41,10 @@ This solution is designed for **one-click deployment** using AWS CloudFormation.
    - Navigate to the AWS CloudFormation console in your AWS account
    - Create a new stack using the template: `cfn/anomaly_cfn.yaml`
    - The template will automatically:
-     - Create MSK Serverless cluster with required networking (VPC, subnets, security groups)
+     - Create Amazon MSK Serverless cluster with required networking (VPC, subnets, security groups)
      - Set up CodeCommit repository with project source code
      - Launch CodeBuild project that deploys the CDK application
-     - Deploy all Lambda functions, Bedrock agents, and SNS topics
+     - Deploy all AWS Lambda functions, and SNS topics
      - Configure Flink applications for real-time stream processing
 
 2. **Monitor deployment progress**:
@@ -55,53 +54,31 @@ This solution is designed for **one-click deployment** using AWS CloudFormation.
 
 ### Manual Development Setup (Optional)
 
-For development purposes only:
+For development purposes only.
 
 ```bash
 # Clone repository
 git clone <repository-url>
-cd hack-180-agentic-ai-enhanced-real-time-anomaly-detection-system
+cd <repository-dir>
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Deploy with existing MSK cluster
-cdk deploy --parameters mskClusterArn=<your-msk-cluster-arn>
 ```
 
 ## Usage
 
 ### Architecture Overview
 
-1. **Data Ingestion**: Health data flows into MSK topic `data-ingest`
-2. **Stream Processing**: Flink application processes data and outputs anomalies to `data-output` topic
-3. **AI Analysis**: Lambda function invokes Bedrock agent to analyze health events
-4. **Intelligent Routing**: Agent routes to appropriate action group based on event content:
-   - Location-based events (safe zone violations) → Reactive workflow
-   - High severity health events → Reactive workflow  
-   - Low-medium severity trends → Proactive workflow
-5. **Notifications**: SNS topics deliver alerts to relevant stakeholders
+1. **Data Ingestion**: Clickstream data flows into MSK topic `data-ingest`
+2. **Stream Processing**: Flink application processes data and detects anomalies, outputting results to `data-output` topic
+3. **AI Analysis**: AWS Lambda function invokes Bedrock agent to analyze clickstream anomalies
+4. **Intelligent Routing**: Agent routes to appropriate action group based on anomaly type:
+   - Race condition anomalies → Code finding workflow
+   - Sequence gap issues → Frontend debugging workflow
+   - Performance anomalies → Optimization recommendations
+5. **Developer Notifications**: SNS topics deliver code fixes and recommendations to development teams
 
-### Example Health Event Processing
-
-**Input** (Flink anomaly detection):
-```json
-{
-  "patient_id": "P12345",
-  "severity": "low", 
-  "description": "Patient detected outside designated safe zone",
-  "last_known_location": {"lat": 34.042283, "lng": -118.250064}
-}
-```
-
-**Output** (Reactive alert):
-```
-LOCATION ALERT: Patient Outside Safe Zone
-
-Our monitoring system has detected that you've been outside your designated safe zone for an extended period. Your current location is in Los Angeles (34.042283, -118.250064).
-
-This requires immediate caregiver notification for safety purposes...
-```
 
 ## Project Structure
 
@@ -109,65 +86,59 @@ This requires immediate caregiver notification for safety purposes...
 - **`code/code_stack.py`**: Main CDK stack with all AWS resources
 - **`code/lambdas/`**: Lambda function implementations
   - `invoke_agent/`: Processes MSK events and invokes Bedrock agent
-  - `reactive_health_action_group/`: Emergency response workflows
-  - `proactive_health_action_group/`: Wellness monitoring workflows
-- **`flink-app/`**: Java Flink application for stream processing
-- **`cfn/`**: CloudFormation templates for additional resources
+  - `agent_action_group/`: Code generation and developer recommendation workflows
+- **`flink-app/`**: Java Flink application for clickstream processing and anomaly detection
+- **`cfn/`**: CloudFormation templates for infrastructure
+- **`normal-events-producer/`**: Test data generator for clickstream events
 
 ## Technical Implementation Details
 
 ### 1. CDK Infrastructure (`app.py`)
 The main CDK application deploys:
-- **Bedrock Agent**: AI decision-making engine with dual action groups
-- **Lambda Functions**: Event processing and notification handlers
+- **AWS Lambda Functions**: Event processing and notification handlers
 - **SNS Topics**: Encrypted notification channels for different stakeholder groups
-- **MSK Integration**: Event source mapping for real-time data processing
+- **Amazon MSK Integration**: Event source mapping for real-time data processing
 - **IAM Roles**: Least-privilege access for all components
 
 ### 2. Flink Stream Processing (`flink-app/`)
 Java-based Flink application that:
-- Consumes health data from MSK `data-ingest` topic
-- Applies anomaly detection algorithms
+- Consumes clickstream data from MSK `data-ingest` topic
+- Detects race conditions, sequence gaps, and logical violations
+- Applies machine learning algorithms for anomaly detection
 - Outputs structured anomaly events to `data-output` topic
 - Supports real-time processing with configurable windowing
 
 ### 3. AI Agent Workflows (`code/lambdas/`)
 **Invoke Agent Lambda**: 
 - Triggered by MSK events
-- Formats health data for agent analysis
+- Formats clickstream anomaly data for agent analysis
 - Handles Bedrock agent invocation with retry logic
 
-**Reactive Health Action Group**:
-- Processes emergency and safety-critical events
-- Generates urgent medical alerts
-- Notifies emergency services, caregivers, and healthcare providers
-
-**Proactive Health Action Group**:
-- Handles wellness monitoring and trend analysis
-- Creates preventive health advisories
-- Sends supportive notifications to patients and care teams
+**Agent Action Group**:
+- Processes frontend anomalies and generates code fixes
+- Creates detailed technical recommendations
+- Generates HTML-formatted emails with syntax highlighting
+- Provides best practices and prevention strategies
+- Notifies development teams with actionable solutions
 
 ### 4. Notification Architecture
-Three encrypted SNS topics with KMS key rotation:
-- **Emergency Topic**: Critical alerts requiring immediate response
-- **Caregiver Topic**: Family/caregiver notifications
-- **Primary Care Topic**: Healthcare provider updates
+Encrypted SNS topics with KMS key rotation:
+- **Developer Topic**: Code fixes and technical recommendations
+- **DevOps Topic**: Infrastructure and performance alerts
+- **Product Team Topic**: User experience impact notifications
 
 ### 5. Agent Intelligence
-The Bedrock agent uses sophisticated routing logic:
-- Analyzes both severity level AND event description content
-- Routes location-based events (safe zone violations) to reactive workflow regardless of severity
-- Applies clinical decision-making for health event classification
-- Maintains context-aware response generation
+The Bedrock agent uses sophisticated analysis logic:
+- Analyzes anomaly patterns and severity levels
+- Generates context-aware code fixes for detected issues
+- Applies software engineering best practices
+- Creates detailed technical documentation and recommendations
+- Maintains awareness of frontend frameworks and common patterns
 
 ## Support
 
 For questions or issues, please contact any of the repository owners.
 
-## Contributing
-
-This is a hackathon project. Contributions are welcome through pull requests.
-
 ## Project Status
 
-Active development for hackathon submission. This is a proof-of-concept implementation demonstrating AI-enhanced health monitoring capabilities.
+Active development for hackathon submission. This is a proof-of-concept implementation demonstrating AI-enhanced clickstream monitoring and automated developer assistance capabilities.
