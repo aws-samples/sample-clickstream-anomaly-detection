@@ -218,6 +218,10 @@ Resources:
           FromPort: 3900
           ToPort: 3900
           CidrIp: 10.0.0.0/24
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "Allow all outbound traffic"
 
   KafkaClientEC2Instance:
     Type: AWS::EC2::Instance
@@ -431,6 +435,10 @@ Resources:
           FromPort: 9098
           ToPort: 9098
           SourceSecurityGroupId: !Ref EcsSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "Allow all outbound traffic"
   MSKSelfIngressAllowRule:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
