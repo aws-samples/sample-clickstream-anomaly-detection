@@ -1,0 +1,14 @@
+{
+  "records": {
+    "data-output": [
+      {
+        "value": "eyJ1c2VyX2lkIjogMzMzMzMsICJzZXZlcml0eSI6ICJtZWRpdW0iLCAiZGVzY3JpcHRpb24iOiAiQ2xpY2tzdHJlYW0gcmFjZSBjb25kaXRpb24gZGV0ZWN0ZWQ6IGFkZF90b19jYXJ0IGV2ZW50IChzZXE6IDEwMDApIG9jY3VycmVkIGJlZm9yZSBwcm9kdWN0X3ZpZXcgZXZlbnQgKHNlcTogMTAwMSkgZm9yIHNhbWUgdXNlciBzZXNzaW9uLiBFeHBlY3RlZCB1c2VyIGpvdXJuZXkgdmlvbGF0ZWQgLWNhcnQgYWN0aW9uIHdpdGhvdXQgcHJpb3IgcHJvZHVjdCBpbnRlcmFjdGlvbiBzdWdnZXN0cyBmcm9udGVuZCBhc3luYyBvcGVyYXRpb24gcmFjZSBjb25kaXRpb24gb3IgZXZlbnQgdHJhY2tpbmcgc3lzdGVtIGJhdGNoaW5nIGlzc3Vlcy4iLCAiYW5vbWFseV90eXBlIjogInNlcXVlbmNlX3Zpb2xhdGlvbiIsICJhZmZlY3RlZF9ldmVudHMiOiBbeyJnbG9iYWxzZXEiOiAxMDAwLCAiZXZlbnRfdHlwZSI6ICJhZGRfdG9fY2FydCIsICJ0aW1lc3RhbXAiOiAxNzU3MDE2NTg1NDY0fSwgeyJnbG9iYWxzZXEiOiAxMDAxLCAiZXZlbnRfdHlwZSI6ICJwcm9kdWN0X3ZpZXciLCAidGltZXN0YW1wIjogMTc1NzAxNjU4NTYxNH1dLCAiZGV0ZWN0aW9uX3RpbWVzdGFtcCI6IDE3NTcwMTY1ODk2MzB9",
+        "topic": "data-output",
+        "partition": 0,
+        "offset": 12345,
+        "timestamp": 1757016589630,
+        "timestampType": "CREATE_TIME"
+      }
+    ]
+  }
+}

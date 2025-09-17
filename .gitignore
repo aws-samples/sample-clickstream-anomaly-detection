@@ -1,0 +1,18 @@
+normal-events-producer/test.py
+code/lambdas/test_lambda.py
+*pycache*/
+__pycache__/
+nodejs.msi
+*.pyc
+venv
+
+# CDK output directories
+assets/
+cdk.out/
+.venv/
+.vscode/
+node_modules/
+*.egg-info/
+.pytest_cache/
+.coverage
+.DS_Store
