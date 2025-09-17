@@ -720,7 +720,13 @@ Resources:
                 Resource: "*"
               - Effect: Allow
                 Action:
-                  - ecr:*
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
                 Resource: 
                   - !Sub "arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/test-data-generator"
         - PolicyName: "CodeBuildLogsRole"
@@ -1451,7 +1457,21 @@ Resources:
             "Version": "2012-10-17",
             "Statement": [
               {
-                "Action": "kinesisanalytics:*",
+                "Action": [
+                  "kinesisanalytics:CreateApplication",
+                  "kinesisanalytics:DeleteApplication",
+                  "kinesisanalytics:DescribeApplication",
+                  "kinesisanalytics:UpdateApplication",
+                  "kinesisanalytics:StartApplication",
+                  "kinesisanalytics:StopApplication",
+                  "kinesisanalytics:ListApplications",
+                  "kinesisanalytics:AddApplicationInput",
+                  "kinesisanalytics:AddApplicationOutput",
+                  "kinesisanalytics:AddApplicationReferenceDataSource",
+                  "kinesisanalytics:DeleteApplicationInput",
+                  "kinesisanalytics:DeleteApplicationOutput",
+                  "kinesisanalytics:DeleteApplicationReferenceDataSource"
+                ],
                 "Effect": "Allow",
                 "Resource": "*"
               },
