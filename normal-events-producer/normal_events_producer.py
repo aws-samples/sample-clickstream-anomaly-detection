@@ -83,8 +83,7 @@ def produce_normal_events():
         # Send each event
         for data in events:
             producer.send(topic, key=str(random.randint(1, 10000)), value=data)
-        
-        time.sleep(2)  # Match the data generator timing
+
 
 if __name__ == "__main__":
     produce_normal_events()
