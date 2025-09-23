@@ -1,0 +1,11 @@
+{
+  "agent": "test-agent",
+  "actionGroup": "security-action-group",
+  "function": "generateTemplate",
+  "parameters": [
+    {
+      "name": "eventData",
+      "value": "Clickstream Anomaly Detection Alert:\n- User ID: 67890\n- Severity: medium\n- Anomaly Type: sequence_violation\n- Detection Time: 1757018180133\n- Description: Clickstream race condition detected: add_to_cart event (seq: 1003) occurred before product_view event (seq: 1003) for same user session. Expected user journey violated - cart action without prior product interaction suggests frontend async operation race condition or event tracking system batching issues.\n- Affected Events:\n  - Seq 1003: add_to_cart at 1757018174129\n  - Seq 1003: product_view at 1757018175976\n\nThis anomaly requires immediate analysis to determine if it indicates a technical issue, security concern, or user experience problem that needs resolution."
+    }
+  ]
+}

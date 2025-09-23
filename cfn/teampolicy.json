@@ -1,0 +1,50 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:*",
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:CreateInstanceProfile",
+                "iam:DeleteInstanceProfile",
+                "iam:AddRoleToInstanceProfile",
+                "iam:RemoveRoleFromInstanceProfile",
+                "iam:CreatePolicy",
+                "iam:DeletePolicy",
+                "iam:GetRole",
+                "iam:GetRolePolicy",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies",
+                "iam:PassRole",
+                "ec2:*",
+                "msk:*",
+                "kafka:*",
+                "kafka-cluster:*",
+                "s3:*",
+                "lambda:*",
+                "logs:*",
+                "codecommit:*",
+                "codebuild:*",
+                "ecs:*",
+                "ecr:*",
+                "kinesisanalytics:*",
+                "glue:*",
+                "bedrock:*",
+                "sns:*",
+                "kms:*",
+                "events:*",
+                "xray:*",
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "sts:AssumeRole"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
