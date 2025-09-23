@@ -10,6 +10,7 @@ venv
 assets/
 cdk.out/
 .venv/
+.kiro/
 .vscode/
 node_modules/
 *.egg-info/

@@ -7,13 +7,13 @@ This repository demonstrates an AI-powered real-time clickstream anomaly detecti
 ### Key Features
 
 - **Real-time Clickstream Monitoring**: Processes streaming clickstream data from e-commerce frontend applications
-- **AI-Powered Decision Making**: Uses Amazon Bedrock agents with Claude 3.7 Sonnet for intelligent anomaly analysis
+- **AI-Powered Decision Making**: Uses Amazon Bedrock agents with Claude Sonnet LLM for intelligent anomaly analysis
 - **Frontend Issue Detection**: Identifies race conditions, sequence gaps, and logical violations in user interactions
 - **Smart Developer Assistance**: 
   - **Code Generation**: AI-generated fixes for detected frontend issues
   - **Best Practices**: Recommendations for preventing similar issues
 - **Intelligent Routing**: Automatically determines issue severity and routes to appropriate developer notification channels
-- **Multi-Channel Notifications**: Sends alerts to development teams, DevOps, and product managers via SNS
+- **Multi-Channel Notifications**: Sends alerts to development teams, DevOps, and product managers via email
 - **Scalable Architecture**: Built on AWS serverless technologies (AWS Lambda,Amazon MSK,Amazon Bedrock,Managed Apache Flink)
 
 ## Prerequisites
@@ -33,9 +33,9 @@ This repository demonstrates an AI-powered real-time clickstream anomaly detecti
 
 ## Installation
 
-### One-Click Deployment
+### Provision AWS resources
 
-This solution is designed for **one-click deployment** using AWS CloudFormation. The CloudFormation template automatically handles all infrastructure provisioning and CDK deployment.
+This solution is designed for **IaC deployment** using AWS CloudFormation. The CloudFormation template automatically handles most of the infrastructure provisioning and CDK deployment.
 
 1. **Deploy the CloudFormation template**:
    - Navigate to the AWS CloudFormation console in your AWS account
@@ -43,8 +43,7 @@ This solution is designed for **one-click deployment** using AWS CloudFormation.
    - The template will automatically:
      - Create Amazon MSK Serverless cluster with required networking (VPC, subnets, security groups)
      - Set up CodeCommit repository with project source code
-     - Launch CodeBuild project that deploys the CDK application
-     - Deploy all AWS Lambda functions, and SNS topics
+     - Launch CodeBuild project that deploys all AWS Lambda functions, SNS Topics, and their integration
      - Configure Flink applications for real-time stream processing
 
 2. **Monitor deployment progress**:
@@ -52,7 +51,7 @@ This solution is designed for **one-click deployment** using AWS CloudFormation.
    - CodeBuild automatically runs CDK deployment as part of the stack creation
    - All resources are provisioned and configured automatically
 
-### Manual Development Setup (Optional)
+### Manual CDK Development Setup (Optional)
 
 For development purposes only.
 
@@ -64,11 +63,17 @@ cd <repository-dir>
 # Install dependencies
 pip install -r requirements.txt
 
+# Build CDK Project locally
+cdk synth
 ```
 
 ## Usage
 
 ### Architecture Overview
+
+![Clickstream Anomaly Detection Architecture](./generated-diagrams/clickstream-architecture-updated.png)
+
+The system follows a real-time streaming architecture with AI-enhanced decision making:
 
 1. **Data Ingestion**: Clickstream data flows into MSK topic `data-ingest`
 2. **Stream Processing**: Flink application processes data and detects anomalies, outputting results to `data-output` topic
@@ -78,6 +83,15 @@ pip install -r requirements.txt
    - Sequence gap issues → Frontend debugging workflow
    - Performance anomalies → Optimization recommendations
 5. **Developer Notifications**: SNS topics deliver code fixes and recommendations to development teams
+
+#### Key Components:
+
+- **MSK Serverless**: Handles high-throughput clickstream data ingestion and processing
+- **Managed Apache Flink**: Real-time anomaly detection with configurable windowing
+- **Amazon Bedrock**: AI-powered analysis using Claude 3.7 Sonnet for intelligent decision making
+- **Lambda Functions**: Event processing and agent orchestration
+- **SNS Topics**: Multi-channel encrypted notifications for different stakeholder groups
+- **CodeBuild/CodeCommit**: Automated CDK deployment and infrastructure management
 
 
 ## Project Structure
