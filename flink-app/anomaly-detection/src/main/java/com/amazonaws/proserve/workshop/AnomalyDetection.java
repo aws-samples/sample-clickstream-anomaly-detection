@@ -22,6 +22,12 @@ import com.amazonaws.proserve.workshop.pattern.AbstractPatternDetector;
 import com.amazonaws.proserve.workshop.pattern.RaceConditionPatternDetector;
 import com.amazonaws.proserve.workshop.process.model.ClickstreamAnomaly;
 import com.amazonaws.proserve.workshop.process.model.Event;
+import com.amazonaws.proserve.workshop.process.model.ConversionMetrics;
+import com.amazonaws.proserve.workshop.process.model.ProductMetrics;
+import com.amazonaws.proserve.workshop.process.model.HealthMetrics;
+import com.amazonaws.proserve.workshop.aggregators.ConversionFunnelAggregator;
+import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
+import com.amazonaws.proserve.workshop.aggregators.HealthScoreAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonDeserializationSchema;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
 import com.amazonaws.proserve.workshop.suppression.AlertSuppressionFunction;
@@ -37,6 +43,9 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -72,6 +81,11 @@ public class AnomalyDetection implements Runnable {
             String sourceBootstrapServer = getProperty(jobProps, "sourceBootstrapServer", "");
             String sinkTopic = getProperty(jobProps, "sinkTopic", "");
             String sinkBootstrapServer = getProperty(jobProps, "sinkBootstrapServer", "");
+            
+            // Business metrics topics
+            String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "business-conversion-metrics");
+            String productTopic = getProperty(jobProps, "productMetricsTopic", "business-product-metrics");
+            String healthTopic = getProperty(jobProps, "healthMetricsTopic", "business-health-metrics");
             log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {}", sourceTopic,  sinkTopic, sourceBootstrapServer, sinkBootstrapServer);
 
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -79,8 +93,11 @@ public class AnomalyDetection implements Runnable {
             // Configure Flink web dashboard port for local environment only
             if (env instanceof org.apache.flink.streaming.api.environment.LocalStreamEnvironment) {
                 org.apache.flink.configuration.Configuration config = new org.apache.flink.configuration.Configuration();
-                // config.setString("rest.port", "53374");
-                env.configure(config);
+                
+                config.setInteger("rest.port", 53374);
+                config.setBoolean("web.submit.enable", true); 
+                env.configure(config);                
+                System.out.println("Flink Web UI: http://localhost:53374");
                 env.setParallelism(6);
             }
 
@@ -135,6 +152,56 @@ public class AnomalyDetection implements Runnable {
                     .build();
 
             suppressedAlerts.sinkTo(sink).name("Sink");
+
+            // Business Metrics Calculations
+            
+            // 1. Conversion Funnel Metrics (5-minute sliding window)
+            DataStream<ConversionMetrics> conversionMetrics = stream
+                .keyBy(Event::getUserid)
+                .window(SlidingProcessingTimeWindows.of(Time.minutes(5), Time.minutes(1)))
+                .process(new ConversionFunnelAggregator());
+            
+            KafkaSink<ConversionMetrics> conversionSink = KafkaSink.<ConversionMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(conversionTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(ConversionMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            conversionMetrics.sinkTo(conversionSink).name("ConversionMetricsSink");
+            
+            // 2. Product Performance Metrics (10-minute tumbling window)
+            DataStream<ProductMetrics> productMetrics = stream
+                .keyBy(Event::getProductType)
+                .window(TumblingProcessingTimeWindows.of(Time.minutes(10)))
+                .process(new ProductPerformanceAggregator());
+            
+            KafkaSink<ProductMetrics> productSink = KafkaSink.<ProductMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(productTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(ProductMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            productMetrics.sinkTo(productSink).name("ProductMetricsSink");
+            
+            // 3. Health Score Metrics (1-minute tumbling window)
+            DataStream<HealthMetrics> healthMetrics = stream
+                .keyBy(Event::getUserid)
+                .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+                .process(new HealthScoreAggregator());
+            
+            KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(healthTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(HealthMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            healthMetrics.sinkTo(healthSink).name("HealthMetricsSink");
             
             env.execute("Anomaly Detection");
         } catch (Exception ex) {

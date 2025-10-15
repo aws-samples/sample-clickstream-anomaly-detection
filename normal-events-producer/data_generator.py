@@ -52,8 +52,8 @@ class TestDataGenerator:
             })
             self.global_seq += 1
             
-            # Checkout (50% chance)
-            if random.random() > 0.5:
+            # Checkout (10% chance)
+            if random.random() > 0.1:
                 events.append({
                     'userid': user_id,
                     'globalseq': self.global_seq,
@@ -63,6 +63,18 @@ class TestDataGenerator:
                     'prevglobalseq': self.global_seq - 1
                 })
                 self.global_seq += 1
+                
+                # Purchase (1% chance)
+                if random.random() < 0.01:
+                    events.append({
+                        'userid': user_id,
+                        'globalseq': self.global_seq,
+                        'event_type': 'purchase',
+                        'product_type': product_type,
+                        'eventtimestamp': base_timestamp + random.randint(5000, 10000),
+                        'prevglobalseq': self.global_seq - 1
+                    })
+                    self.global_seq += 1
         
         return events
     
