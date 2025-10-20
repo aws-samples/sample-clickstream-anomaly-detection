@@ -30,6 +30,12 @@ import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
 import com.amazonaws.proserve.workshop.aggregators.HealthScoreAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonDeserializationSchema;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
+import com.amazonaws.clickstream.ClickstreamEvent;
+import com.amazonaws.services.schemaregistry.flink.avro.GlueSchemaRegistryAvroDeserializationSchema;
+import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
+import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
+import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
+import org.apache.flink.api.common.serialization.DeserializationSchema;
 import com.amazonaws.proserve.workshop.suppression.AlertSuppressionFunction;
 import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 
@@ -44,7 +50,6 @@ import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
-import org.apache.flink.streaming.api.windowing.assigners.SessionWindowTimeGapExtractor;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -84,11 +89,16 @@ public class AnomalyDetection implements Runnable {
             String sinkTopic = getProperty(jobProps, "sinkTopic", "");
             String sinkBootstrapServer = getProperty(jobProps, "sinkBootstrapServer", "");
             
+            // Schema Registry properties
+            String awsRegion = getProperty(jobProps, "awsRegion", "");
+            String registryName = getProperty(jobProps, "registryName", "");
+            String schemaName = getProperty(jobProps, "schemaName", "");
+            
             // Business metrics topics
             String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "business-conversion-metrics");
             String productTopic = getProperty(jobProps, "productMetricsTopic", "business-product-metrics");
             String healthTopic = getProperty(jobProps, "healthMetricsTopic", "business-health-metrics");
-            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {}", sourceTopic,  sinkTopic, sourceBootstrapServer, sinkBootstrapServer);
+            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
 
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -125,15 +135,39 @@ public class AnomalyDetection implements Runnable {
                 startingOffsets = OffsetsInitializer.timestamp(Long.parseLong(initpos));
             }
 
-            final KafkaSource<Event> dataSource = KafkaSource.<Event>builder().setProperties(kafkaProps)
-                    .setBootstrapServers(sourceBootstrapServer).setGroupId("AnomalyDetectorApp")
-                    .setTopics(sourceTopic).setStartingOffsets(startingOffsets)
-                    .setValueOnlyDeserializer(JsonDeserializationSchema.forSpecific(Event.class)).build();
+            Map<String, Object> deserializerConfig = Map.of(
+                    AWSSchemaRegistryConstants.AVRO_RECORD_TYPE, AvroRecordType.SPECIFIC_RECORD.getName(),
+                    AWSSchemaRegistryConstants.AWS_REGION, awsRegion,
+                    AWSSchemaRegistryConstants.REGISTRY_NAME, registryName,
+                    AWSSchemaRegistryConstants.SCHEMA_NAME, schemaName);
+            
+            DeserializationSchema<ClickstreamEvent> avroDeserializationSchema = 
+                    GlueSchemaRegistryAvroDeserializationSchema.forSpecific(ClickstreamEvent.class, deserializerConfig);
+            
+            KafkaRecordDeserializationSchema<ClickstreamEvent> kafkaRecordDeserializationSchema = 
+                    KafkaRecordDeserializationSchema.valueOnly(avroDeserializationSchema);
 
-            final DataStream<Event> stream = env.fromSource(dataSource,
-                    WatermarkStrategy.<Event>forMonotonousTimestamps()
+            final KafkaSource<ClickstreamEvent> avroDataSource = KafkaSource.<ClickstreamEvent>builder()
+                    .setProperties(kafkaProps)
+                    .setBootstrapServers(sourceBootstrapServer)
+                    .setGroupId("AnomalyDetectorApp")
+                    .setTopics(sourceTopic)
+                    .setStartingOffsets(startingOffsets)
+                    .setDeserializer(kafkaRecordDeserializationSchema)
+                    .build();
+
+            final DataStream<Event> stream = env.fromSource(avroDataSource,
+                    WatermarkStrategy.<ClickstreamEvent>forMonotonousTimestamps()
                             .withTimestampAssigner((event, timestamp) -> event.getEventtimestamp()),
-                    "Source");
+                    "AvroSource")
+                    .map(clickstreamEvent -> Event.builder()
+                            .userid(clickstreamEvent.getUserid())
+                            .globalseq(clickstreamEvent.getGlobalseq())
+                            .eventType(clickstreamEvent.getEventType().toString())
+                            .productType(clickstreamEvent.getProductType().toString())
+                            .eventtimestamp(clickstreamEvent.getEventtimestamp())
+                            .prevglobalseq(clickstreamEvent.getPrevglobalseq())
+                            .build());
 
             AbstractPatternDetector<ClickstreamAnomaly> patternDetector = new RaceConditionPatternDetector();
             DataStream<ClickstreamAnomaly> raceConditions = patternDetector.detectAnomalies(stream);
