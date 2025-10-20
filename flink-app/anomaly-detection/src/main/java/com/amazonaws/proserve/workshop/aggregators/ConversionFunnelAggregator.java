@@ -14,7 +14,7 @@ public class ConversionFunnelAggregator extends ProcessWindowFunction<Event, Con
         
         for (Event event : events) {
             String eventType = event.getEventType();
-            if ("view".equals(eventType)) viewCount++;
+            if ("product_view".equals(eventType)) viewCount++;
             else if ("add_to_cart".equals(eventType)) addToCartCount++;
             else if ("checkout".equals(eventType)) checkoutCount++;
             else if ("purchase".equals(eventType)) purchaseCount++;

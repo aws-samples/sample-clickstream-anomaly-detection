@@ -20,8 +20,6 @@ public class HealthMetrics {
     private double healthScore;
     @JsonProperty("total_events")
     private long totalEvents;
-    @JsonProperty("avg_response_time")
-    private double avgResponseTime;
     @JsonProperty("errors_by_type")
     private Map<String, Long> errorsByType;
 }

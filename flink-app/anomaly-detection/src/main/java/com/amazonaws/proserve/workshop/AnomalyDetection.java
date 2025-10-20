@@ -43,6 +43,8 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
+import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SessionWindowTimeGapExtractor;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
@@ -155,10 +157,10 @@ public class AnomalyDetection implements Runnable {
 
             // Business Metrics Calculations
             
-            // 1. Conversion Funnel Metrics (5-minute sliding window)
+            // 1. Conversion Funnel Metrics (Session windows with 1 second gap)
             DataStream<ConversionMetrics> conversionMetrics = stream
                 .keyBy(Event::getUserid)
-                .window(SlidingProcessingTimeWindows.of(Time.minutes(5), Time.minutes(1)))
+                .window(EventTimeSessionWindows.withGap(Time.seconds(1)))
                 .process(new ConversionFunnelAggregator());
             
             KafkaSink<ConversionMetrics> conversionSink = KafkaSink.<ConversionMetrics>builder()
@@ -171,10 +173,10 @@ public class AnomalyDetection implements Runnable {
                 .build();
             conversionMetrics.sinkTo(conversionSink).name("ConversionMetricsSink");
             
-            // 2. Product Performance Metrics (10-minute tumbling window)
+            // 2. Product Performance Metrics (10-second tumbling window)
             DataStream<ProductMetrics> productMetrics = stream
                 .keyBy(Event::getProductType)
-                .window(TumblingProcessingTimeWindows.of(Time.minutes(10)))
+                .window(TumblingProcessingTimeWindows.of(Time.seconds(10)))
                 .process(new ProductPerformanceAggregator());
             
             KafkaSink<ProductMetrics> productSink = KafkaSink.<ProductMetrics>builder()
@@ -188,9 +190,9 @@ public class AnomalyDetection implements Runnable {
             productMetrics.sinkTo(productSink).name("ProductMetricsSink");
             
             // 3. Health Score Metrics (1-minute tumbling window)
-            DataStream<HealthMetrics> healthMetrics = stream
-                .keyBy(Event::getUserid)
-                .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+            DataStream<HealthMetrics> healthMetrics = raceConditions
+                .keyBy(ClickstreamAnomaly::getUserId)
+                .window(SlidingProcessingTimeWindows.of(Time.minutes(1), Time.seconds(1)))
                 .process(new HealthScoreAggregator());
             
             KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()

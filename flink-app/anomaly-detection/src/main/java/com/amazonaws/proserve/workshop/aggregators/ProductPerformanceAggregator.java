@@ -14,7 +14,7 @@ public class ProductPerformanceAggregator extends ProcessWindowFunction<Event, P
     public void process(String productType, Context context, Iterable<Event> events, Collector<ProductMetrics> out) {
         long totalViews = 0;
         Set<Long> uniqueUsers = new HashSet<>();
-        long totalDuration = 0;
+        long totalDuration = context.window().getEnd() - context.window().getStart();
         long eventCount = 0;
         
         for (Event event : events) {

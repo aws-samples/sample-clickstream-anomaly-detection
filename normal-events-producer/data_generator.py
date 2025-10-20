@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class TestDataGenerator:
     def __init__(self):
         self.global_seq = 1000
-        self.users = [12345, 67890, 11111, 22222, 33333]
-        self.product_types = ['electronics', 'clothing', 'books', 'home', 'sports']
+        self.users = [12345, 67890, 11111, 22222, 33333, 44444, 55555]
+        self.product_types = ['electronics', 'clothing', 'books', 'home', 'sports', 'beauty', 'automotive', 'toys', 'jewelry', 'health', 'garden', 'music', 'food', 'pets', 'office']
         self.start_time = datetime.now()
         
     def generate_normal_clickstream(self, user_id):
@@ -40,8 +40,8 @@ class TestDataGenerator:
         })
         self.global_seq += 1
         
-        # Add to cart (70% chance)
-        if random.random() > 0.3:
+        # Add to cart (30% chance)
+        if random.random() < 0.3:
             events.append({
                 'userid': user_id,
                 'globalseq': self.global_seq,
@@ -53,7 +53,7 @@ class TestDataGenerator:
             self.global_seq += 1
             
             # Checkout (10% chance)
-            if random.random() > 0.1:
+            if random.random() < 0.1:
                 events.append({
                     'userid': user_id,
                     'globalseq': self.global_seq,
@@ -64,8 +64,8 @@ class TestDataGenerator:
                 })
                 self.global_seq += 1
                 
-                # Purchase (1% chance)
-                if random.random() < 0.01:
+                # Purchase (0.5% chance)
+                if random.random() < 0.05:
                     events.append({
                         'userid': user_id,
                         'globalseq': self.global_seq,
