@@ -1,0 +1,31 @@
+{
+  "type": "record",
+  "name": "ClickstreamEvent",
+  "namespace": "com.amazonaws.clickstream",
+  "fields": [
+    {
+      "name": "userid",
+      "type": "long"
+    },
+    {
+      "name": "globalseq",
+      "type": "long"
+    },
+    {
+      "name": "event_type",
+      "type": "string"
+    },
+    {
+      "name": "product_type",
+      "type": "string"
+    },
+    {
+      "name": "eventtimestamp",
+      "type": "long"
+    },
+    {
+      "name": "prevglobalseq",
+      "type": "long"
+    }
+  ]
+}
