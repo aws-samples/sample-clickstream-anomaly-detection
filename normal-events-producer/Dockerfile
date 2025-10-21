@@ -14,6 +14,7 @@ RUN pip install -r requirements.txt
 
 COPY data_generator.py .
 COPY normal_events_producer.py .
+COPY clickstream-event.avsc .
 COPY startup.sh .
 
 RUN chmod +x startup.sh

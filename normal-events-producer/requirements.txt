@@ -1,3 +1,5 @@
 kafka-python==2.0.2
 faker
 aws-msk-iam-sasl-signer-python
+avro-python3==1.10.2
+boto3
