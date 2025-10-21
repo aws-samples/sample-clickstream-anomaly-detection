@@ -56,6 +56,7 @@ import org.apache.flink.streaming.api.windowing.time.Time;
 import picocli.CommandLine;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 
@@ -95,9 +96,9 @@ public class AnomalyDetection implements Runnable {
             String schemaName = getProperty(jobProps, "schemaName", "");
             
             // Business metrics topics
-            String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "business-conversion-metrics");
-            String productTopic = getProperty(jobProps, "productMetricsTopic", "business-product-metrics");
-            String healthTopic = getProperty(jobProps, "healthMetricsTopic", "business-health-metrics");
+            String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "");
+            String productTopic = getProperty(jobProps, "productMetricsTopic", "");
+            String healthTopic = getProperty(jobProps, "healthMetricsTopic", "");
             log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
 
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -157,7 +158,7 @@ public class AnomalyDetection implements Runnable {
                     .build();
 
             final DataStream<Event> stream = env.fromSource(avroDataSource,
-                    WatermarkStrategy.<ClickstreamEvent>forMonotonousTimestamps()
+                    WatermarkStrategy.<ClickstreamEvent>forBoundedOutOfOrderness(Duration.ofMillis(500))
                             .withTimestampAssigner((event, timestamp) -> event.getEventtimestamp()),
                     "AvroSource")
                     .map(clickstreamEvent -> Event.builder()

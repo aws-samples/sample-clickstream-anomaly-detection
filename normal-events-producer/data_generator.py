@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class TestDataGenerator:
     def __init__(self):
         self.global_seq = 1000
-        self.users = [12345, 67890, 11111, 22222, 33333, 44444, 55555]
+        self.users = [100001, 200003, 300007, 400009, 500011, 600013, 700017, 800019, 900023, 1000027, 1100029, 1200031]
         self.product_types = ['electronics', 'clothing', 'books', 'home', 'sports', 'beauty', 'automotive', 'toys', 'jewelry', 'health', 'garden', 'music', 'food', 'pets', 'office']
         self.start_time = datetime.now()
         
@@ -153,20 +153,19 @@ def main(event):
     
     messages = []
     
-    for _ in range(5):
-        user_id = random.choice(generator.users)
+    user_id = random.choice(generator.users)
+    
+    try:
+        if should_generate_anomaly and random.random() < 0.3:
+            events = generator.generate_anomaly_clickstream(user_id)
+            logger.info(f"Generated anomaly for user {user_id}")
+        else:
+            events = generator.generate_normal_clickstream(user_id)
         
-        try:
-            if should_generate_anomaly and random.random() < 0.3:
-                events = generator.generate_anomaly_clickstream(user_id)
-                logger.info(f"Generated anomaly for user {user_id}")
-            else:
-                events = generator.generate_normal_clickstream(user_id)
-            
-            messages.extend(events)
-            
-        except Exception as e:
-            logger.error(f"Error generating events for user {user_id}: {e}")
+        messages.extend(events)
+        
+    except Exception as e:
+        logger.error(f"Error generating events for user {user_id}: {e}")
     
     # for msg in messages:
         # print(json.dumps(msg))
@@ -177,3 +176,4 @@ if __name__ == "__main__":
     import time
     while True:
         main({})
+        time.sleep(0.1)
