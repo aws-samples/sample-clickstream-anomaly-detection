@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 class TestDataGenerator:
     def __init__(self):
         self.global_seq = 1000
-        self.users = [100001, 200003, 300007, 400009, 500011, 600013, 700017, 800019, 900023, 1000027, 1100029, 1200031]
-        self.product_types = ['electronics', 'clothing', 'books', 'home', 'sports', 'beauty', 'automotive', 'toys', 'jewelry', 'health', 'garden', 'music', 'food', 'pets', 'office']
+        self.users = [12345, 67890, 11111, 22222, 33333]
+        self.product_types = ['electronics', 'clothing', 'books', 'home', 'sports']
         self.start_time = datetime.now()
         
     def generate_normal_clickstream(self, user_id):
@@ -40,8 +40,8 @@ class TestDataGenerator:
         })
         self.global_seq += 1
         
-        # Add to cart (30% chance)
-        if random.random() < 0.3:
+        # Add to cart (70% chance)
+        if random.random() > 0.3:
             events.append({
                 'userid': user_id,
                 'globalseq': self.global_seq,
@@ -52,8 +52,8 @@ class TestDataGenerator:
             })
             self.global_seq += 1
             
-            # Checkout (10% chance)
-            if random.random() < 0.1:
+            # Checkout (50% chance)
+            if random.random() > 0.5:
                 events.append({
                     'userid': user_id,
                     'globalseq': self.global_seq,
@@ -63,18 +63,6 @@ class TestDataGenerator:
                     'prevglobalseq': self.global_seq - 1
                 })
                 self.global_seq += 1
-                
-                # Purchase (0.5% chance)
-                if random.random() < 0.05:
-                    events.append({
-                        'userid': user_id,
-                        'globalseq': self.global_seq,
-                        'event_type': 'purchase',
-                        'product_type': product_type,
-                        'eventtimestamp': base_timestamp + random.randint(5000, 10000),
-                        'prevglobalseq': self.global_seq - 1
-                    })
-                    self.global_seq += 1
         
         return events
     
@@ -153,19 +141,20 @@ def main(event):
     
     messages = []
     
-    user_id = random.choice(generator.users)
-    
-    try:
-        if should_generate_anomaly and random.random() < 0.3:
-            events = generator.generate_anomaly_clickstream(user_id)
-            logger.info(f"Generated anomaly for user {user_id}")
-        else:
-            events = generator.generate_normal_clickstream(user_id)
+    for _ in range(5):
+        user_id = random.choice(generator.users)
         
-        messages.extend(events)
-        
-    except Exception as e:
-        logger.error(f"Error generating events for user {user_id}: {e}")
+        try:
+            if should_generate_anomaly and random.random() < 0.3:
+                events = generator.generate_anomaly_clickstream(user_id)
+                logger.info(f"Generated anomaly for user {user_id}")
+            else:
+                events = generator.generate_normal_clickstream(user_id)
+            
+            messages.extend(events)
+            
+        except Exception as e:
+            logger.error(f"Error generating events for user {user_id}: {e}")
     
     # for msg in messages:
         # print(json.dumps(msg))
@@ -176,4 +165,3 @@ if __name__ == "__main__":
     import time
     while True:
         main({})
-        time.sleep(0.1)

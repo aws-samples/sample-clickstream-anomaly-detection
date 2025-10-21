@@ -6,7 +6,7 @@
 
     <groupId>com.amazonaws.proserve.workshop</groupId>
     <artifactId>clickstream-anomaly-detection</artifactId>
-    <version>2.0-SNAPSHOT</version>
+    <version>1.0-SNAPSHOT</version>
 
     <properties>
         <encoding>UTF-8</encoding>
@@ -15,7 +15,7 @@
         <maven.compiler.target>11</maven.compiler.target>
         <flink.version>1.18.1</flink.version>
         <java.version>11</java.version>
-        <aws.sdk.version>1.12.470</aws.sdk.version>
+        <aws.sdk.version>1.12.701</aws.sdk.version>
         <junit.version>5.8.0</junit.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
@@ -43,13 +43,6 @@
         <dependency>
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-json</artifactId>
-            <version>${flink.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.apache.flink/flink-runtime-web -->
-        <dependency>
-            <groupId>org.apache.flink</groupId>
-            <artifactId>flink-runtime-web</artifactId>
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -82,16 +75,6 @@
             <groupId>org.apache.flink</groupId>
             <artifactId>flink-cep</artifactId>
             <version>${flink.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.glue</groupId>
-            <artifactId>schema-registry-flink-serde</artifactId>
-            <version>1.1.15</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.avro</groupId>
-            <artifactId>avro</artifactId>
-            <version>1.11.3</version>
         </dependency>
         <!--        Utils -->
         <dependency>
@@ -268,23 +251,6 @@
                     <configuration>
                     <skipTests>true</skipTests>
                     </configuration>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.avro</groupId>
-                    <artifactId>avro-maven-plugin</artifactId>
-                    <version>1.11.3</version>
-                    <executions>
-                        <execution>
-                            <phase>generate-sources</phase>
-                            <goals>
-                                <goal>schema</goal>
-                            </goals>
-                            <configuration>
-                                <sourceDirectory>${project.basedir}/src/main/avro/</sourceDirectory>
-                                <outputDirectory>${project.basedir}/src/main/java/</outputDirectory>
-                            </configuration>
-                        </execution>
-                    </executions>
                 </plugin>
         </plugins>
     </build>
