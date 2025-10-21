@@ -22,8 +22,20 @@ import com.amazonaws.proserve.workshop.pattern.AbstractPatternDetector;
 import com.amazonaws.proserve.workshop.pattern.RaceConditionPatternDetector;
 import com.amazonaws.proserve.workshop.process.model.ClickstreamAnomaly;
 import com.amazonaws.proserve.workshop.process.model.Event;
+import com.amazonaws.proserve.workshop.process.model.ConversionMetrics;
+import com.amazonaws.proserve.workshop.process.model.ProductMetrics;
+import com.amazonaws.proserve.workshop.process.model.HealthMetrics;
+import com.amazonaws.proserve.workshop.aggregators.ConversionFunnelAggregator;
+import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
+import com.amazonaws.proserve.workshop.aggregators.HealthScoreAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonDeserializationSchema;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
+import com.amazonaws.clickstream.ClickstreamEvent;
+import com.amazonaws.services.schemaregistry.flink.avro.GlueSchemaRegistryAvroDeserializationSchema;
+import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
+import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
+import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
+import org.apache.flink.api.common.serialization.DeserializationSchema;
 import com.amazonaws.proserve.workshop.suppression.AlertSuppressionFunction;
 import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 
@@ -37,9 +49,14 @@ import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
+import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.time.Time;
 import picocli.CommandLine;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 
@@ -72,15 +89,28 @@ public class AnomalyDetection implements Runnable {
             String sourceBootstrapServer = getProperty(jobProps, "sourceBootstrapServer", "");
             String sinkTopic = getProperty(jobProps, "sinkTopic", "");
             String sinkBootstrapServer = getProperty(jobProps, "sinkBootstrapServer", "");
-            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {}", sourceTopic,  sinkTopic, sourceBootstrapServer, sinkBootstrapServer);
+            
+            // Schema Registry properties
+            String awsRegion = getProperty(jobProps, "awsRegion", "");
+            String registryName = getProperty(jobProps, "registryName", "");
+            String schemaName = getProperty(jobProps, "schemaName", "");
+            
+            // Business metrics topics
+            String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "");
+            String productTopic = getProperty(jobProps, "productMetricsTopic", "");
+            String healthTopic = getProperty(jobProps, "healthMetricsTopic", "");
+            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
 
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
             // Configure Flink web dashboard port for local environment only
             if (env instanceof org.apache.flink.streaming.api.environment.LocalStreamEnvironment) {
                 org.apache.flink.configuration.Configuration config = new org.apache.flink.configuration.Configuration();
-                // config.setString("rest.port", "53374");
-                env.configure(config);
+                
+                config.setInteger("rest.port", 53374);
+                config.setBoolean("web.submit.enable", true); 
+                env.configure(config);                
+                System.out.println("Flink Web UI: http://localhost:53374");
                 env.setParallelism(6);
             }
 
@@ -106,15 +136,39 @@ public class AnomalyDetection implements Runnable {
                 startingOffsets = OffsetsInitializer.timestamp(Long.parseLong(initpos));
             }
 
-            final KafkaSource<Event> dataSource = KafkaSource.<Event>builder().setProperties(kafkaProps)
-                    .setBootstrapServers(sourceBootstrapServer).setGroupId("AnomalyDetectorApp")
-                    .setTopics(sourceTopic).setStartingOffsets(startingOffsets)
-                    .setValueOnlyDeserializer(JsonDeserializationSchema.forSpecific(Event.class)).build();
+            Map<String, Object> deserializerConfig = Map.of(
+                    AWSSchemaRegistryConstants.AVRO_RECORD_TYPE, AvroRecordType.SPECIFIC_RECORD.getName(),
+                    AWSSchemaRegistryConstants.AWS_REGION, awsRegion,
+                    AWSSchemaRegistryConstants.REGISTRY_NAME, registryName,
+                    AWSSchemaRegistryConstants.SCHEMA_NAME, schemaName);
+            
+            DeserializationSchema<ClickstreamEvent> avroDeserializationSchema = 
+                    GlueSchemaRegistryAvroDeserializationSchema.forSpecific(ClickstreamEvent.class, deserializerConfig);
+            
+            KafkaRecordDeserializationSchema<ClickstreamEvent> kafkaRecordDeserializationSchema = 
+                    KafkaRecordDeserializationSchema.valueOnly(avroDeserializationSchema);
 
-            final DataStream<Event> stream = env.fromSource(dataSource,
-                    WatermarkStrategy.<Event>forMonotonousTimestamps()
+            final KafkaSource<ClickstreamEvent> avroDataSource = KafkaSource.<ClickstreamEvent>builder()
+                    .setProperties(kafkaProps)
+                    .setBootstrapServers(sourceBootstrapServer)
+                    .setGroupId("AnomalyDetectorApp")
+                    .setTopics(sourceTopic)
+                    .setStartingOffsets(startingOffsets)
+                    .setDeserializer(kafkaRecordDeserializationSchema)
+                    .build();
+
+            final DataStream<Event> stream = env.fromSource(avroDataSource,
+                    WatermarkStrategy.<ClickstreamEvent>forBoundedOutOfOrderness(Duration.ofMillis(500))
                             .withTimestampAssigner((event, timestamp) -> event.getEventtimestamp()),
-                    "Source");
+                    "AvroSource")
+                    .map(clickstreamEvent -> Event.builder()
+                            .userid(clickstreamEvent.getUserid())
+                            .globalseq(clickstreamEvent.getGlobalseq())
+                            .eventType(clickstreamEvent.getEventType().toString())
+                            .productType(clickstreamEvent.getProductType().toString())
+                            .eventtimestamp(clickstreamEvent.getEventtimestamp())
+                            .prevglobalseq(clickstreamEvent.getPrevglobalseq())
+                            .build());
 
             AbstractPatternDetector<ClickstreamAnomaly> patternDetector = new RaceConditionPatternDetector();
             DataStream<ClickstreamAnomaly> raceConditions = patternDetector.detectAnomalies(stream);
@@ -135,6 +189,56 @@ public class AnomalyDetection implements Runnable {
                     .build();
 
             suppressedAlerts.sinkTo(sink).name("Sink");
+
+            // Business Metrics Calculations
+            
+            // 1. Conversion Funnel Metrics (Session windows with 1 second gap)
+            DataStream<ConversionMetrics> conversionMetrics = stream
+                .keyBy(Event::getUserid)
+                .window(EventTimeSessionWindows.withGap(Time.seconds(1)))
+                .process(new ConversionFunnelAggregator());
+            
+            KafkaSink<ConversionMetrics> conversionSink = KafkaSink.<ConversionMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(conversionTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(ConversionMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            conversionMetrics.sinkTo(conversionSink).name("ConversionMetricsSink");
+            
+            // 2. Product Performance Metrics (10-second tumbling window)
+            DataStream<ProductMetrics> productMetrics = stream
+                .keyBy(Event::getProductType)
+                .window(TumblingProcessingTimeWindows.of(Time.seconds(10)))
+                .process(new ProductPerformanceAggregator());
+            
+            KafkaSink<ProductMetrics> productSink = KafkaSink.<ProductMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(productTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(ProductMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            productMetrics.sinkTo(productSink).name("ProductMetricsSink");
+            
+            // 3. Health Score Metrics (1-minute tumbling window)
+            DataStream<HealthMetrics> healthMetrics = raceConditions
+                .keyBy(ClickstreamAnomaly::getUserId)
+                .window(SlidingProcessingTimeWindows.of(Time.minutes(1), Time.seconds(1)))
+                .process(new HealthScoreAggregator());
+            
+            KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()
+                .setBootstrapServers(sinkBootstrapServer)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                    .setTopic(healthTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(HealthMetrics.class))
+                    .build())
+                .setKafkaProducerConfig(kafkaProps)
+                .build();
+            healthMetrics.sinkTo(healthSink).name("HealthMetricsSink");
             
             env.execute("Anomaly Detection");
         } catch (Exception ex) {
