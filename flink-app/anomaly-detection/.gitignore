@@ -40,3 +40,6 @@ build/
 /src/test/java/scratch/
 /.idea/
 /anomaly-detection.log
+
+### Application Properties ###
+application.properties
