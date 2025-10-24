@@ -55,7 +55,7 @@ public class RaceConditionPatternDetector extends AbstractPatternDetector<Clicks
     @Override
     public DataStream<ClickstreamAnomaly> detectAnomalies(DataStream<Event> eventStream) {
         return org.apache.flink.cep.CEP.pattern(
-                eventStream.keyBy(Event::getUserid),
+                eventStream.keyBy((event) -> String.format("%s-%s", event.getUserid(), event.getProductType().toString())),
                 definePattern())
                 .inEventTime()
                 .select(this::extractAlert);
