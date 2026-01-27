@@ -4,7 +4,6 @@ import com.amazonaws.proserve.workshop.process.model.ClickstreamAnomaly;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.util.Collector;
 
@@ -13,7 +12,7 @@ public class AlertSuppressionFunction extends KeyedProcessFunction<Long, Clickst
     private ValueState<Long> lastAlertTime;
     
     @Override
-    public void open(Configuration parameters) {
+    public void open(org.apache.flink.api.common.functions.OpenContext openContext) throws Exception {
         lastAlertTime = getRuntimeContext().getState(
             new ValueStateDescriptor<>("lastAlertTime", Long.class));
     }

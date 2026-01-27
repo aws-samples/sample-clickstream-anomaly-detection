@@ -37,7 +37,6 @@ import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import com.amazonaws.proserve.workshop.suppression.AlertSuppressionFunction;
-import com.amazonaws.services.kinesisanalytics.runtime.KinesisAnalyticsRuntime;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,7 +51,6 @@ import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -107,19 +105,26 @@ public class AnomalyDetection implements Runnable {
             if (env instanceof org.apache.flink.streaming.api.environment.LocalStreamEnvironment) {
                 org.apache.flink.configuration.Configuration config = new org.apache.flink.configuration.Configuration();
                 
-                config.setInteger("rest.port", 53374);
-                config.setBoolean("web.submit.enable", true); 
+                config.set(org.apache.flink.configuration.RestOptions.PORT, 53374);
+                config.set(org.apache.flink.configuration.WebOptions.SUBMIT_ENABLE, true); 
                 env.configure(config);                
                 System.out.println("Flink Web UI: http://localhost:53374");
                 env.setParallelism(6);
             }
 
             Properties kafkaProps = new Properties();
-            kafkaProps.setProperty("security.protocol", "SASL_SSL");
-            kafkaProps.setProperty("sasl.mechanism", "AWS_MSK_IAM");
-            kafkaProps.setProperty("sasl.jaas.config", "software.amazon.msk.auth.iam.IAMLoginModule required;");
-            kafkaProps.setProperty("sasl.client.callback.handler.class",
-                    "software.amazon.msk.auth.iam.IAMClientCallbackHandler");
+            
+            // Use PLAINTEXT for local Kafka, SASL_SSL for MSK
+            String securityProtocol = getProperty(jobProps, "securityProtocol", "PLAINTEXT");
+            if ("SASL_SSL".equals(securityProtocol)) {
+                kafkaProps.setProperty("security.protocol", "SASL_SSL");
+                kafkaProps.setProperty("sasl.mechanism", "AWS_MSK_IAM");
+                kafkaProps.setProperty("sasl.jaas.config", "software.amazon.msk.auth.iam.IAMLoginModule required;");
+                kafkaProps.setProperty("sasl.client.callback.handler.class",
+                        "software.amazon.msk.auth.iam.IAMClientCallbackHandler");
+            } else {
+                kafkaProps.setProperty("security.protocol", "PLAINTEXT");
+            }
 
 
             String initpos = getProperty(jobProps, "initpos", "EARLIEST");
@@ -136,17 +141,30 @@ public class AnomalyDetection implements Runnable {
                 startingOffsets = OffsetsInitializer.timestamp(Long.parseLong(initpos));
             }
 
-            Map<String, Object> deserializerConfig = Map.of(
-                    AWSSchemaRegistryConstants.AVRO_RECORD_TYPE, AvroRecordType.SPECIFIC_RECORD.getName(),
-                    AWSSchemaRegistryConstants.AWS_REGION, awsRegion,
-                    AWSSchemaRegistryConstants.REGISTRY_NAME, registryName,
-                    AWSSchemaRegistryConstants.SCHEMA_NAME, schemaName);
+            // Support both JSON (for local testing) and Avro (for production with Glue Schema Registry)
+            String serializationFormat = getProperty(jobProps, "serializationFormat", "JSON");
+            KafkaRecordDeserializationSchema<ClickstreamEvent> kafkaRecordDeserializationSchema;
             
-            DeserializationSchema<ClickstreamEvent> avroDeserializationSchema = 
-                    GlueSchemaRegistryAvroDeserializationSchema.forSpecific(ClickstreamEvent.class, deserializerConfig);
-            
-            KafkaRecordDeserializationSchema<ClickstreamEvent> kafkaRecordDeserializationSchema = 
-                    KafkaRecordDeserializationSchema.valueOnly(avroDeserializationSchema);
+            if ("AVRO".equalsIgnoreCase(serializationFormat)) {
+                Map<String, Object> deserializerConfig = Map.of(
+                        AWSSchemaRegistryConstants.AVRO_RECORD_TYPE, AvroRecordType.SPECIFIC_RECORD.getName(),
+                        AWSSchemaRegistryConstants.AWS_REGION, awsRegion,
+                        AWSSchemaRegistryConstants.REGISTRY_NAME, registryName,
+                        AWSSchemaRegistryConstants.SCHEMA_NAME, schemaName);
+                
+                DeserializationSchema<ClickstreamEvent> avroDeserializationSchema = 
+                        GlueSchemaRegistryAvroDeserializationSchema.forSpecific(ClickstreamEvent.class, deserializerConfig);
+                
+                kafkaRecordDeserializationSchema = 
+                        KafkaRecordDeserializationSchema.valueOnly(avroDeserializationSchema);
+            } else {
+                // Use JSON deserialization for local testing
+                DeserializationSchema<ClickstreamEvent> jsonDeserializationSchema = 
+                        com.amazonaws.proserve.workshop.serde.JsonDeserializationSchema.forSpecific(ClickstreamEvent.class);
+                
+                kafkaRecordDeserializationSchema = 
+                        KafkaRecordDeserializationSchema.valueOnly(jsonDeserializationSchema);
+            }
 
             final KafkaSource<ClickstreamEvent> avroDataSource = KafkaSource.<ClickstreamEvent>builder()
                     .setProperties(kafkaProps)
@@ -164,8 +182,8 @@ public class AnomalyDetection implements Runnable {
                     .map(clickstreamEvent -> Event.builder()
                             .userid(clickstreamEvent.getUserid())
                             .globalseq(clickstreamEvent.getGlobalseq())
-                            .eventType(clickstreamEvent.getEventType().toString())
-                            .productType(clickstreamEvent.getProductType().toString())
+                            .eventType(clickstreamEvent.getEventType() != null ? clickstreamEvent.getEventType().toString() : null)
+                            .productType(clickstreamEvent.getProductType() != null ? clickstreamEvent.getProductType().toString() : null)
                             .eventtimestamp(clickstreamEvent.getEventtimestamp())
                             .prevglobalseq(clickstreamEvent.getPrevglobalseq())
                             .build());
@@ -195,7 +213,7 @@ public class AnomalyDetection implements Runnable {
             // 1. Conversion Funnel Metrics (Session windows with 1 second gap)
             DataStream<ConversionMetrics> conversionMetrics = stream
                 .keyBy(Event::getUserid)
-                .window(EventTimeSessionWindows.withGap(Time.seconds(1)))
+                .window(EventTimeSessionWindows.withGap(Duration.ofSeconds(1)))
                 .process(new ConversionFunnelAggregator());
             
             KafkaSink<ConversionMetrics> conversionSink = KafkaSink.<ConversionMetrics>builder()
@@ -211,7 +229,7 @@ public class AnomalyDetection implements Runnable {
             // 2. Product Performance Metrics (10-second tumbling window)
             DataStream<ProductMetrics> productMetrics = stream
                 .keyBy(Event::getProductType)
-                .window(TumblingProcessingTimeWindows.of(Time.seconds(10)))
+                .window(TumblingProcessingTimeWindows.of(Duration.ofSeconds(10)))
                 .process(new ProductPerformanceAggregator());
             
             KafkaSink<ProductMetrics> productSink = KafkaSink.<ProductMetrics>builder()
@@ -227,7 +245,7 @@ public class AnomalyDetection implements Runnable {
             // 3. Health Score Metrics (1-minute tumbling window)
             DataStream<HealthMetrics> healthMetrics = raceConditions
                 .keyBy(ClickstreamAnomaly::getUserId)
-                .window(SlidingProcessingTimeWindows.of(Time.minutes(1), Time.seconds(1)))
+                .window(SlidingProcessingTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(1)))
                 .process(new HealthScoreAggregator());
             
             KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()
@@ -256,13 +274,8 @@ public class AnomalyDetection implements Runnable {
             }
             return props;
         } else {
-            Map<String, Properties> appConfigs = KinesisAnalyticsRuntime.getApplicationProperties();
-            Properties props = appConfigs.get(propertyGroupId);
-            if (props == null || props.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "No such property group found or group have no properties, group id: " + propertyGroupId);
-            }
-            return props;
+            throw new IllegalArgumentException(
+                    "Configuration file must be provided via -f or --config-file parameter");
         }
     }
 

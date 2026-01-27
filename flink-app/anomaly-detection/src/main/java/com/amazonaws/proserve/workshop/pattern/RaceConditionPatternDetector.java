@@ -3,10 +3,12 @@ package com.amazonaws.proserve.workshop.pattern;
 import com.amazonaws.proserve.workshop.process.model.Event;
 import com.amazonaws.proserve.workshop.process.model.ClickstreamAnomaly;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.api.common.typeinfo.TypeHint;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.cep.nfa.aftermatch.AfterMatchSkipStrategy;
 import org.apache.flink.cep.pattern.Pattern;
 import org.apache.flink.cep.pattern.conditions.SimpleCondition;
-import org.apache.flink.streaming.api.windowing.time.Time;
+import java.time.Duration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 
 import java.util.Arrays;
@@ -22,7 +24,7 @@ public class RaceConditionPatternDetector extends AbstractPatternDetector<Clicks
                 .where(SimpleCondition.of(event -> "add_to_cart".equals(event.getEventType())))
                 .followedBy("productView")
                 .where(SimpleCondition.of(event -> "product_view".equals(event.getEventType())))
-                .within(Time.seconds(10));
+                .within(Duration.ofSeconds(10));
     }
     
     @Override
@@ -58,6 +60,9 @@ public class RaceConditionPatternDetector extends AbstractPatternDetector<Clicks
                 eventStream.keyBy((event) -> String.format("%s-%s", event.getUserid(), event.getProductType().toString())),
                 definePattern())
                 .inEventTime()
-                .select(this::extractAlert);
+                .select(
+                    this::extractAlert,
+                    TypeInformation.of(new TypeHint<ClickstreamAnomaly>() {})
+                );
     }
 }
