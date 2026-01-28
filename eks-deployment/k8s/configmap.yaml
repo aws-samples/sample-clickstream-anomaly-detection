@@ -23,4 +23,4 @@ data:
     # Kafka Configuration
     securityProtocol=SASL_SSL
     initpos=LATEST
-    serializationFormat=JSON
+    serializationFormat=AVRO
