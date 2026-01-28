@@ -1,0 +1,83 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: anomaly-detection
+  namespace: flink
+spec:
+  image: 668876353122.dkr.ecr.us-east-1.amazonaws.com/flink-anomaly-detection:latest
+  flinkVersion: v2_2
+  imagePullPolicy: Always
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "4"
+    state.backend.type: rocksdb
+    state.backend.rocksdb.incremental: "true"
+    state.checkpoints.dir: s3://eksflinkstack-flinkcheckpointbucket8f94d80e-tv7aptonr0ys/checkpoints
+    state.savepoints.dir: s3://eksflinkstack-flinkcheckpointbucket8f94d80e-tv7aptonr0ys/savepoints
+    execution.checkpointing.interval: 60s
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.min-pause: 30s
+    execution.checkpointing.max-concurrent-checkpoints: "1"
+    restart-strategy.type: fixed-delay
+    restart-strategy.fixed-delay.attempts: "3"
+    restart-strategy.fixed-delay.delay: 10s
+    # Kafka consumer settings
+    consumer.properties.session.timeout.ms: "30000"
+    consumer.properties.heartbeat.interval.ms: "10000"
+    # Logging
+    rootLogger.level: INFO
+    # S3 configuration for IRSA
+    s3.access.key: ""
+    s3.secret.key: ""
+    fs.s3a.aws.credentials.provider: com.amazonaws.auth.WebIdentityTokenCredentialsProvider
+  serviceAccount: flink
+  jobManager:
+    resource:
+      memory: "2048m"
+      cpu: 1
+    replicas: 1
+    podTemplate:
+      spec:
+        nodeSelector:
+          workload: flink-jobmanager
+        tolerations:
+          - key: workload
+            value: flink-jobmanager
+            effect: NoSchedule
+  taskManager:
+    resource:
+      memory: "4096m"
+      cpu: 2
+    replicas: 2
+    podTemplate:
+      spec:
+        nodeSelector:
+          workload: flink-taskmanager
+        tolerations:
+          - key: workload
+            value: flink-taskmanager
+            effect: NoSchedule
+  job:
+    jarURI: local:///opt/flink/usrlib/anomaly-detection.jar
+    entryClass: com.amazonaws.proserve.workshop.AnomalyDetection
+    args:
+      - "--config-file"
+      - "/opt/flink/conf/flink-config/application.properties"
+    parallelism: 4
+    upgradeMode: savepoint
+    state: running
+    savepointTriggerNonce: 0
+  podTemplate:
+    spec:
+      serviceAccountName: flink
+      containers:
+        - name: flink-main-container
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+          volumeMounts:
+            - name: flink-config
+              mountPath: /opt/flink/conf/flink-config
+      volumes:
+        - name: flink-config
+          configMap:
+            name: flink-config

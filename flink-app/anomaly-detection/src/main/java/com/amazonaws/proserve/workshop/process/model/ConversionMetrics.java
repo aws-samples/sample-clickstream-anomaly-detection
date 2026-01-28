@@ -1,13 +1,17 @@
 package com.amazonaws.proserve.workshop.process.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.jackson.Jacksonized;
 
 @Data
 @Builder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor
 public class ConversionMetrics {
     @JsonProperty("user_id")
     private long userId;

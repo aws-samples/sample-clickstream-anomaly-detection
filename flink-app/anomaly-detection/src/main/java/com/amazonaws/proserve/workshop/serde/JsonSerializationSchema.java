@@ -25,11 +25,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.serialization.SerializationSchema;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.util.Preconditions;
 
 @Slf4j
-public class JsonSerializationSchema<T> implements SerializationSchema<T> {
+public class JsonSerializationSchema<T> implements SerializationSchema<T>, ResultTypeQueryable<T> {
     private static final long serialVersionUID = 1L;
+
+    private final Class<T> recordClazz;
 
     /**
      * Creates {@link JsonSerializationSchema} that produces json from given class.
@@ -51,6 +55,7 @@ public class JsonSerializationSchema<T> implements SerializationSchema<T> {
      */
     JsonSerializationSchema(Class<T> recordClazz) {
         Preconditions.checkNotNull(recordClazz, "Record class must not be null.");
+        this.recordClazz = recordClazz;
     }
 
     @Override
@@ -74,8 +79,10 @@ public class JsonSerializationSchema<T> implements SerializationSchema<T> {
             objectMapper = new ObjectMapper();
             objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
             objectMapper.registerModule(new JavaTimeModule());
-
         }
     }
 
+    public TypeInformation<T> getProducedType() {
+        return TypeInformation.of(recordClazz);
+    }
 }

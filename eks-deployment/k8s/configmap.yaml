@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flink-config
+  namespace: flink
+data:
+  application.properties: |
+    sourceTopic=data-ingest
+    sourceBootstrapServer=boot-dbqasg2s.c3.kafka-serverless.us-east-1.amazonaws.com:9098
+    sinkTopic=data-output
+    sinkBootstrapServer=boot-dbqasg2s.c3.kafka-serverless.us-east-1.amazonaws.com:9098
+    
+    # Schema Registry Configuration
+    awsRegion=us-east-1
+    registryName=clickstream-registry
+    schemaName=clickstream-event-schema
+    
+    # Business Metrics Topics
+    conversionMetricsTopic=business-conversion-metrics
+    productMetricsTopic=business-product-metrics
+    healthMetricsTopic=business-health-metrics
+    
+    # Kafka Configuration
+    securityProtocol=SASL_SSL
+    initpos=LATEST
+    serializationFormat=JSON

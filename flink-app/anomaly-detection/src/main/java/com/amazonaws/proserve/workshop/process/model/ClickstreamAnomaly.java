@@ -6,8 +6,10 @@
 package com.amazonaws.proserve.workshop.process.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.extern.jackson.Jacksonized;
 
@@ -17,6 +19,8 @@ import java.util.List;
 @Builder
 @Jacksonized
 @ToString
+@NoArgsConstructor
+@AllArgsConstructor
 public class ClickstreamAnomaly {
     @JsonProperty("user_id")
     private Long userId;
@@ -40,6 +44,8 @@ public class ClickstreamAnomaly {
     @Builder
     @Jacksonized
     @ToString
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class AffectedEvent {
         @JsonProperty("globalseq")
         private Long globalseq;

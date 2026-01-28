@@ -99,6 +99,13 @@ public class AnomalyDetection implements Runnable {
             String healthTopic = getProperty(jobProps, "healthMetricsTopic", "");
             log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
 
+            // Get security protocol for Kafka configuration
+            String securityProtocol = getProperty(jobProps, "securityProtocol", "PLAINTEXT");
+            
+            // Create topics if they don't exist
+            createTopicsIfNotExist(sourceBootstrapServer, securityProtocol, 
+                sourceTopic, sinkTopic, conversionTopic, productTopic, healthTopic);
+
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
             // Configure Flink web dashboard port for local environment only
@@ -115,7 +122,6 @@ public class AnomalyDetection implements Runnable {
             Properties kafkaProps = new Properties();
             
             // Use PLAINTEXT for local Kafka, SASL_SSL for MSK
-            String securityProtocol = getProperty(jobProps, "securityProtocol", "PLAINTEXT");
             if ("SASL_SSL".equals(securityProtocol)) {
                 kafkaProps.setProperty("security.protocol", "SASL_SSL");
                 kafkaProps.setProperty("sasl.mechanism", "AWS_MSK_IAM");
@@ -285,5 +291,39 @@ public class AnomalyDetection implements Runnable {
             value = defaultValue;
         }
         return value;
+    }
+
+    private static void createTopicsIfNotExist(String bootstrapServers, String securityProtocol, String... topics) {
+        Properties adminProps = new Properties();
+        adminProps.put("bootstrap.servers", bootstrapServers);
+        
+        if ("SASL_SSL".equals(securityProtocol)) {
+            adminProps.put("security.protocol", "SASL_SSL");
+            adminProps.put("sasl.mechanism", "AWS_MSK_IAM");
+            adminProps.put("sasl.jaas.config", "software.amazon.msk.auth.iam.IAMLoginModule required;");
+            adminProps.put("sasl.client.callback.handler.class", "software.amazon.msk.auth.iam.IAMClientCallbackHandler");
+        }
+        
+        try (org.apache.kafka.clients.admin.AdminClient adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminProps)) {
+            java.util.Set<String> existingTopics = adminClient.listTopics().names().get();
+            java.util.List<org.apache.kafka.clients.admin.NewTopic> newTopics = new java.util.ArrayList<>();
+            
+            for (String topic : topics) {
+                if (!existingTopics.contains(topic)) {
+                    log.info("Creating topic: {}", topic);
+                    newTopics.add(new org.apache.kafka.clients.admin.NewTopic(topic, 1, (short) 1));
+                } else {
+                    log.info("Topic already exists: {}", topic);
+                }
+            }
+            
+            if (!newTopics.isEmpty()) {
+                adminClient.createTopics(newTopics).all().get();
+                log.info("Successfully created {} topics", newTopics.size());
+            }
+        } catch (Exception e) {
+            log.error("Failed to create topics", e);
+            throw new RuntimeException("Failed to create Kafka topics", e);
+        }
     }
 }

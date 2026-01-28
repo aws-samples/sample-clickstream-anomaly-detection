@@ -1,14 +1,18 @@
 package com.amazonaws.proserve.workshop.process.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.jackson.Jacksonized;
 import java.util.Map;
 
 @Data
 @Builder
 @Jacksonized
+@NoArgsConstructor
+@AllArgsConstructor
 public class HealthMetrics {
     @JsonProperty("user_id")
     private long userId;

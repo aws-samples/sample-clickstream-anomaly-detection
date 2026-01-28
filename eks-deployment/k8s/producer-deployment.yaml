@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickstream-producer
+  namespace: flink
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickstream-producer
+  template:
+    metadata:
+      labels:
+        app: clickstream-producer
+    spec:
+      serviceAccountName: flink
+      nodeSelector:
+        workload: flink-operator
+      containers:
+        - name: producer
+          image: 668876353122.dkr.ecr.us-east-1.amazonaws.com/clickstream-producer:latest
+          imagePullPolicy: Always
+          env:
+            - name: BOOTSTRAP_SERVER
+              valueFrom:
+                configMapKeyRef:
+                  name: producer-config
+                  key: bootstrap-server
+            - name: TOPIC_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: producer-config
+                  key: topic-name
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: producer-config
+                  key: aws-region
+            - name: SCHEMA_REGISTRY_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: producer-config
+                  key: schema-registry-name
+            - name: SCHEMA_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: producer-config
+                  key: schema-name
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"

@@ -1,0 +1,11 @@
+tolerations:
+  - key: workload
+    value: flink-operator
+    effect: NoSchedule
+
+nodeSelector:
+  workload: flink-operator
+
+# Disable webhook which requires cert-manager
+webhook:
+  create: false
