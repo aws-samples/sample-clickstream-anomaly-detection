@@ -19,6 +19,7 @@ aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --
 # Build Flink JAR
 echo "Building Flink application JAR..."
 cd ../flink-app/anomaly-detection
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 mvn clean package -DskipTests
 
 # Build Docker image for x86_64 (linux/amd64) platform

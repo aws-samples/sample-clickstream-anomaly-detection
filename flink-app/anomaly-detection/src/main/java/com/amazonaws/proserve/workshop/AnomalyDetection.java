@@ -183,6 +183,7 @@ public class AnomalyDetection implements Runnable {
 
             final DataStream<Event> stream = env.fromSource(avroDataSource,
                     WatermarkStrategy.<ClickstreamEvent>forBoundedOutOfOrderness(Duration.ofMillis(500))
+                            .withIdleness(Duration.ofSeconds(5))
                             .withTimestampAssigner((event, timestamp) -> event.getEventtimestamp()),
                     "AvroSource")
                     .map(clickstreamEvent -> Event.builder()
