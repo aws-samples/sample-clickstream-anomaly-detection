@@ -51,7 +51,7 @@ chmod +x scripts/*.sh
 
 ```bash
 # Add Helm repo
-helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.10.0/
+helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.13.0/
 helm repo update
 
 # Install operator
