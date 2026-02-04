@@ -51,7 +51,7 @@ spec:
     resource:
       memory: "5120Mi"
       cpu: 2.5
-    replicas: 2
+    replicas: 1
     podTemplate:
       spec:
         nodeSelector:
@@ -78,7 +78,7 @@ spec:
     args:
       - "--config-file"
       - "/opt/flink/conf/flink-config/application.properties"
-    parallelism: 2
+    parallelism: 1
     upgradeMode: stateless
     state: running
     savepointTriggerNonce: 6

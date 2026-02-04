@@ -21,10 +21,10 @@ package com.amazonaws.proserve.workshop;
 import com.amazonaws.proserve.workshop.process.model.Event;
 import com.amazonaws.proserve.workshop.process.model.ConversionMetrics;
 import com.amazonaws.proserve.workshop.process.model.ProductMetrics;
-import com.amazonaws.proserve.workshop.process.model.HealthMetrics;
+import com.amazonaws.proserve.workshop.process.model.TrendMetrics;
 import com.amazonaws.proserve.workshop.aggregators.ConversionFunnelAggregator;
 import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
-import com.amazonaws.proserve.workshop.aggregators.UserActivityAggregator;
+import com.amazonaws.proserve.workshop.aggregators.TrendAnalysisAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
 import com.amazonaws.clickstream.ClickstreamEvent;
 import com.amazonaws.services.schemaregistry.flink.avro.GlueSchemaRegistryAvroDeserializationSchema;
@@ -44,6 +44,7 @@ import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsIni
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -89,7 +90,7 @@ public class AnomalyDetection implements Runnable {
             // Business metrics topics
             String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "");
             String productTopic = getProperty(jobProps, "productMetricsTopic", "");
-            String healthTopic = getProperty(jobProps, "healthMetricsTopic", "");
+            String trendTopic = getProperty(jobProps, "trendMetricsTopic", "");
             log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
 
             // Get security protocol for Kafka configuration
@@ -97,7 +98,7 @@ public class AnomalyDetection implements Runnable {
             
             // Create topics if they don't exist
             createTopicsIfNotExist(sourceBootstrapServer, securityProtocol, 
-                sourceTopic, sinkTopic, conversionTopic, productTopic, healthTopic);
+                sourceTopic, sinkTopic, conversionTopic, productTopic, trendTopic);
 
             final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -222,22 +223,22 @@ public class AnomalyDetection implements Runnable {
                 .build();
             productMetrics.sinkTo(productSink).name("ProductMetricsSink");
             
-            // 3. User Activity Metrics (30-second tumbling window)
-            // Simple example: count events per user in 30-second windows
-            DataStream<HealthMetrics> userActivityMetrics = stream
-                .keyBy(Event::getUserid)
-                .window(TumblingProcessingTimeWindows.of(Duration.ofSeconds(30)))
-                .process(new UserActivityAggregator());
+            // 3. Trend Analysis Metrics (1-minute sliding window, 10-second slide)
+            // Overlapping windows for trend detection and moving averages
+            DataStream<TrendMetrics> trendMetrics = stream
+                .keyBy(Event::getProductType)
+                .window(SlidingProcessingTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(10)))
+                .process(new TrendAnalysisAggregator());
             
-            KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()
+            KafkaSink<TrendMetrics> trendSink = KafkaSink.<TrendMetrics>builder()
                 .setBootstrapServers(sinkBootstrapServer)
                 .setRecordSerializer(KafkaRecordSerializationSchema.builder()
-                    .setTopic(healthTopic)
-                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(HealthMetrics.class))
+                    .setTopic(trendTopic)
+                    .setValueSerializationSchema(JsonSerializationSchema.forSpecific(TrendMetrics.class))
                     .build())
                 .setKafkaProducerConfig(kafkaProps)
                 .build();
-            userActivityMetrics.sinkTo(healthSink).name("UserActivityMetricsSink");
+            trendMetrics.sinkTo(trendSink).name("TrendMetricsSink");
             
             
             env.execute("Anomaly Detection");

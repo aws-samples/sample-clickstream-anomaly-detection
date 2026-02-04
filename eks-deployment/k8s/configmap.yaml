@@ -18,7 +18,7 @@ data:
     # Business Metrics Topics
     conversionMetricsTopic=business-conversion-metrics
     productMetricsTopic=business-product-metrics
-    healthMetricsTopic=business-health-metrics
+    trendMetricsTopic=business-health-metrics
     
     # Kafka Configuration
     securityProtocol=SASL_SSL
