@@ -18,17 +18,13 @@
 
 package com.amazonaws.proserve.workshop;
 
-import com.amazonaws.proserve.workshop.pattern.AbstractPatternDetector;
-import com.amazonaws.proserve.workshop.pattern.RaceConditionPatternDetector;
-import com.amazonaws.proserve.workshop.process.model.ClickstreamAnomaly;
 import com.amazonaws.proserve.workshop.process.model.Event;
 import com.amazonaws.proserve.workshop.process.model.ConversionMetrics;
 import com.amazonaws.proserve.workshop.process.model.ProductMetrics;
 import com.amazonaws.proserve.workshop.process.model.HealthMetrics;
 import com.amazonaws.proserve.workshop.aggregators.ConversionFunnelAggregator;
 import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
-import com.amazonaws.proserve.workshop.aggregators.HealthScoreAggregator;
-import com.amazonaws.proserve.workshop.serde.JsonDeserializationSchema;
+import com.amazonaws.proserve.workshop.aggregators.UserActivityAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
 import com.amazonaws.clickstream.ClickstreamEvent;
 import com.amazonaws.services.schemaregistry.flink.avro.GlueSchemaRegistryAvroDeserializationSchema;
@@ -36,8 +32,6 @@ import com.amazonaws.services.schemaregistry.utils.AWSSchemaRegistryConstants;
 import com.amazonaws.services.schemaregistry.utils.AvroRecordType;
 import org.apache.flink.connector.kafka.source.reader.deserializer.KafkaRecordDeserializationSchema;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
-import com.amazonaws.proserve.workshop.suppression.AlertSuppressionFunction;
-
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.commons.lang3.StringUtils;
@@ -49,7 +43,6 @@ import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
-import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import picocli.CommandLine;
 
@@ -195,26 +188,6 @@ public class AnomalyDetection implements Runnable {
                             .prevglobalseq(clickstreamEvent.getPrevglobalseq())
                             .build());
 
-            AbstractPatternDetector<ClickstreamAnomaly> patternDetector = new RaceConditionPatternDetector();
-            DataStream<ClickstreamAnomaly> raceConditions = patternDetector.detectAnomalies(stream);
-
-            // Add suppression logic - only allow 1 alert per user every 120 seconds
-            DataStream<ClickstreamAnomaly> suppressedAlerts = raceConditions
-                .keyBy(ClickstreamAnomaly::getUserId)
-                .process(new AlertSuppressionFunction());
-
-            // Create Kafka sink
-            KafkaSink<ClickstreamAnomaly> sink = KafkaSink.<ClickstreamAnomaly>builder()
-                    .setBootstrapServers(sinkBootstrapServer)
-                    .setRecordSerializer(KafkaRecordSerializationSchema.builder()
-                            .setTopic(sinkTopic)
-                            .setValueSerializationSchema(JsonSerializationSchema.forSpecific(ClickstreamAnomaly.class))
-                            .build())
-                    .setKafkaProducerConfig(kafkaProps)
-                    .build();
-
-            suppressedAlerts.sinkTo(sink).name("Sink");
-
             // Business Metrics Calculations
             
             // 1. Conversion Funnel Metrics (Session windows with 1 second gap)
@@ -249,11 +222,12 @@ public class AnomalyDetection implements Runnable {
                 .build();
             productMetrics.sinkTo(productSink).name("ProductMetricsSink");
             
-            // 3. Health Score Metrics (1-minute tumbling window)
-            DataStream<HealthMetrics> healthMetrics = raceConditions
-                .keyBy(ClickstreamAnomaly::getUserId)
-                .window(SlidingProcessingTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(1)))
-                .process(new HealthScoreAggregator());
+            // 3. User Activity Metrics (30-second tumbling window)
+            // Simple example: count events per user in 30-second windows
+            DataStream<HealthMetrics> userActivityMetrics = stream
+                .keyBy(Event::getUserid)
+                .window(TumblingProcessingTimeWindows.of(Duration.ofSeconds(30)))
+                .process(new UserActivityAggregator());
             
             KafkaSink<HealthMetrics> healthSink = KafkaSink.<HealthMetrics>builder()
                 .setBootstrapServers(sinkBootstrapServer)
@@ -263,7 +237,8 @@ public class AnomalyDetection implements Runnable {
                     .build())
                 .setKafkaProducerConfig(kafkaProps)
                 .build();
-            healthMetrics.sinkTo(healthSink).name("HealthMetricsSink");
+            userActivityMetrics.sinkTo(healthSink).name("UserActivityMetricsSink");
+            
             
             env.execute("Anomaly Detection");
         } catch (Exception ex) {
