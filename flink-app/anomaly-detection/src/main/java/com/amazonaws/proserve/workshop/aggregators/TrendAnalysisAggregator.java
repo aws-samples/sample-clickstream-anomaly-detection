@@ -39,6 +39,7 @@ public class TrendAnalysisAggregator extends ProcessWindowFunction<Event, TrendM
                 .eventCount(eventCount)
                 .eventsPerSecond(eventsPerSecond)
                 .eventTypeBreakdown(eventTypeBreakdown)
+                .outputTimestamp(System.currentTimeMillis())
                 .build();
                 
         out.collect(metrics);

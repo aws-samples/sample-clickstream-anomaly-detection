@@ -28,5 +28,7 @@ public class Event implements Serializable {
     private Long eventtimestamp;
     @JsonProperty("prevglobalseq")
     private Long prevglobalseq;
+    @JsonProperty("ingestion_timestamp")
+    private Long ingestionTimestamp;
 
 }

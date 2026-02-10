@@ -20,6 +20,9 @@ data:
     productMetricsTopic=business-product-metrics
     trendMetricsTopic=business-health-metrics
     
+    # Performance Metrics S3 Output (leave empty to disable)
+    performanceMetricsS3Path=s3://eksflinkstack-flinkcheckpointbucket8f94d80e-tv7aptonr0ys/performance-metrics/
+    
     # Kafka Configuration
     securityProtocol=SASL_SSL
     initpos=LATEST

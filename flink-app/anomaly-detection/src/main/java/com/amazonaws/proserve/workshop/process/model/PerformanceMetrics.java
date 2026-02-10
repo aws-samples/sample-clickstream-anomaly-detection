@@ -4,18 +4,19 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.util.Map;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TrendMetrics {
+public class PerformanceMetrics {
     private long windowStart;
     private long windowEnd;
-    private String productType;
-    private long eventCount;
-    private double eventsPerSecond;
-    private Map<String, Long> eventTypeBreakdown;
-    private Long outputTimestamp; // When this metric was emitted from the window
+    private long totalMessages;
+    private double messagesPerSecond;
+    private double avgLatencyMs;
+    private double minLatencyMs;
+    private double maxLatencyMs;
+    private double p95LatencyMs;
+    private double p99LatencyMs;
 }

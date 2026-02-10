@@ -22,9 +22,12 @@ import com.amazonaws.proserve.workshop.process.model.Event;
 import com.amazonaws.proserve.workshop.process.model.ConversionMetrics;
 import com.amazonaws.proserve.workshop.process.model.ProductMetrics;
 import com.amazonaws.proserve.workshop.process.model.TrendMetrics;
+import com.amazonaws.proserve.workshop.process.model.PerformanceMetrics;
 import com.amazonaws.proserve.workshop.aggregators.ConversionFunnelAggregator;
 import com.amazonaws.proserve.workshop.aggregators.ProductPerformanceAggregator;
 import com.amazonaws.proserve.workshop.aggregators.TrendAnalysisAggregator;
+import com.amazonaws.proserve.workshop.aggregators.PerformanceMetricsAggregator;
+import com.amazonaws.proserve.workshop.aggregators.TrendMetricsPerformanceAggregator;
 import com.amazonaws.proserve.workshop.serde.JsonSerializationSchema;
 import com.amazonaws.clickstream.ClickstreamEvent;
 import com.amazonaws.services.schemaregistry.flink.avro.GlueSchemaRegistryAvroDeserializationSchema;
@@ -45,6 +48,10 @@ import org.apache.flink.streaming.api.datastream.*;
 import org.apache.flink.streaming.api.windowing.assigners.EventTimeSessionWindows;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.assigners.SlidingProcessingTimeWindows;
+import org.apache.flink.connector.file.sink.FileSink;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.api.common.serialization.SimpleStringEncoder;
+import org.apache.flink.streaming.api.functions.sink.filesystem.rollingpolicies.DefaultRollingPolicy;
 import picocli.CommandLine;
 
 import java.io.IOException;
@@ -91,7 +98,12 @@ public class AnomalyDetection implements Runnable {
             String conversionTopic = getProperty(jobProps, "conversionMetricsTopic", "");
             String productTopic = getProperty(jobProps, "productMetricsTopic", "");
             String trendTopic = getProperty(jobProps, "trendMetricsTopic", "");
-            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {}", sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName);
+            
+            // Performance metrics S3 path
+            String performanceMetricsS3Path = getProperty(jobProps, "performanceMetricsS3Path", "");
+            
+            log.info("Flink Job properties map: sourceTopic {} sinkTopic {} sourceBootstrapServer {} sinkBootstrapServer {} awsRegion {} registryName {} schemaName {} performanceMetricsS3Path {}", 
+                sourceTopic, sinkTopic, sourceBootstrapServer, sinkBootstrapServer, awsRegion, registryName, schemaName, performanceMetricsS3Path);
 
             // Get security protocol for Kafka configuration
             String securityProtocol = getProperty(jobProps, "securityProtocol", "PLAINTEXT");
@@ -180,14 +192,19 @@ public class AnomalyDetection implements Runnable {
                             .withIdleness(Duration.ofSeconds(5))
                             .withTimestampAssigner((event, timestamp) -> event.getEventtimestamp()),
                     "AvroSource")
-                    .map(clickstreamEvent -> Event.builder()
-                            .userid(clickstreamEvent.getUserid())
-                            .globalseq(clickstreamEvent.getGlobalseq())
-                            .eventType(clickstreamEvent.getEventType() != null ? clickstreamEvent.getEventType().toString() : null)
-                            .productType(clickstreamEvent.getProductType() != null ? clickstreamEvent.getProductType().toString() : null)
-                            .eventtimestamp(clickstreamEvent.getEventtimestamp())
-                            .prevglobalseq(clickstreamEvent.getPrevglobalseq())
-                            .build());
+                    .map(clickstreamEvent -> {
+                        // Capture ingestion timestamp as soon as message arrives
+                        long ingestionTime = System.currentTimeMillis();
+                        return Event.builder()
+                                .userid(clickstreamEvent.getUserid())
+                                .globalseq(clickstreamEvent.getGlobalseq())
+                                .eventType(clickstreamEvent.getEventType() != null ? clickstreamEvent.getEventType().toString() : null)
+                                .productType(clickstreamEvent.getProductType() != null ? clickstreamEvent.getProductType().toString() : null)
+                                .eventtimestamp(clickstreamEvent.getEventtimestamp())
+                                .prevglobalseq(clickstreamEvent.getPrevglobalseq())
+                                .ingestionTimestamp(ingestionTime)
+                                .build();
+                    });
 
             // Business Metrics Calculations
             
@@ -223,11 +240,11 @@ public class AnomalyDetection implements Runnable {
                 .build();
             productMetrics.sinkTo(productSink).name("ProductMetricsSink");
             
-            // 3. Trend Analysis Metrics (1-minute sliding window, 10-second slide)
-            // Overlapping windows for trend detection and moving averages
+            // 3. Trend Analysis Metrics (100ms sliding window, 100ms slide)
+            // Fast overlapping windows for trend detection
             DataStream<TrendMetrics> trendMetrics = stream
                 .keyBy(Event::getProductType)
-                .window(SlidingProcessingTimeWindows.of(Duration.ofMinutes(1), Duration.ofSeconds(10)))
+                .window(SlidingProcessingTimeWindows.of(Duration.ofMillis(100), Duration.ofMillis(100)))
                 .process(new TrendAnalysisAggregator());
             
             KafkaSink<TrendMetrics> trendSink = KafkaSink.<TrendMetrics>builder()
@@ -239,6 +256,74 @@ public class AnomalyDetection implements Runnable {
                 .setKafkaProducerConfig(kafkaProps)
                 .build();
             trendMetrics.sinkTo(trendSink).name("TrendMetricsSink");
+            
+            // 3b. Trend Window Performance Metrics (5-minute tumbling window on TrendMetrics output) -> S3
+            // Measure the performance of the trend analysis window operator over 5 minutes
+            if (!performanceMetricsS3Path.isEmpty()) {
+                DataStream<PerformanceMetrics> trendWindowPerformance = trendMetrics
+                    .windowAll(TumblingProcessingTimeWindows.of(Duration.ofMinutes(5)))
+                    .process(new TrendMetricsPerformanceAggregator());
+                
+                // Convert to JSON string for S3 output
+                DataStream<String> trendPerfJson = trendWindowPerformance.map(metrics -> {
+                    return String.format(
+                        "{\"type\":\"trend_window\",\"windowStart\":%d,\"windowEnd\":%d,\"totalMessages\":%d," +
+                        "\"messagesPerSecond\":%.2f,\"avgLatencyMs\":%.2f," +
+                        "\"minLatencyMs\":%.2f,\"maxLatencyMs\":%.2f," +
+                        "\"p95LatencyMs\":%.2f,\"p99LatencyMs\":%.2f}",
+                        metrics.getWindowStart(), metrics.getWindowEnd(), metrics.getTotalMessages(),
+                        metrics.getMessagesPerSecond(), metrics.getAvgLatencyMs(),
+                        metrics.getMinLatencyMs(), metrics.getMaxLatencyMs(),
+                        metrics.getP95LatencyMs(), metrics.getP99LatencyMs()
+                    );
+                });
+                
+                // S3 FileSink with rolling policy
+                FileSink<String> trendPerfS3Sink = FileSink
+                    .forRowFormat(new Path(performanceMetricsS3Path + "trend-window/"), new SimpleStringEncoder<String>("UTF-8"))
+                    .withRollingPolicy(
+                        DefaultRollingPolicy.builder()
+                            .withRolloverInterval(Duration.ofMinutes(5))
+                            .withInactivityInterval(Duration.ofMinutes(3))
+                            .build())
+                    .build();
+                
+                trendPerfJson.sinkTo(trendPerfS3Sink).name("TrendWindowPerformanceS3Sink");
+            }
+            
+            // 4. Performance Metrics (5-minute tumbling window) -> S3
+            // Calculate throughput and latency, write to S3 every 5 minutes
+            if (!performanceMetricsS3Path.isEmpty()) {
+                DataStream<PerformanceMetrics> performanceMetrics = stream
+                    .windowAll(TumblingProcessingTimeWindows.of(Duration.ofMinutes(5)))
+                    .process(new PerformanceMetricsAggregator());
+                
+                // Convert to JSON string for S3 output
+                DataStream<String> performanceJson = performanceMetrics.map(metrics -> {
+                    return String.format(
+                        "{\"windowStart\":%d,\"windowEnd\":%d,\"totalMessages\":%d," +
+                        "\"messagesPerSecond\":%.2f,\"avgLatencyMs\":%.2f," +
+                        "\"minLatencyMs\":%.2f,\"maxLatencyMs\":%.2f," +
+                        "\"p95LatencyMs\":%.2f,\"p99LatencyMs\":%.2f}",
+                        metrics.getWindowStart(), metrics.getWindowEnd(), metrics.getTotalMessages(),
+                        metrics.getMessagesPerSecond(), metrics.getAvgLatencyMs(),
+                        metrics.getMinLatencyMs(), metrics.getMaxLatencyMs(),
+                        metrics.getP95LatencyMs(), metrics.getP99LatencyMs()
+                    );
+                });
+                
+                // S3 FileSink with rolling policy
+                FileSink<String> s3Sink = FileSink
+                    .forRowFormat(new Path(performanceMetricsS3Path), new SimpleStringEncoder<String>("UTF-8"))
+                    .withRollingPolicy(
+                        DefaultRollingPolicy.builder()
+                            .withRolloverInterval(Duration.ofMinutes(5))
+                            .withInactivityInterval(Duration.ofMinutes(3))
+                            .build())
+                    .build();
+                
+                performanceJson.sinkTo(s3Sink).name("PerformanceMetricsS3Sink");
+            }
             
             
             env.execute("Anomaly Detection");
