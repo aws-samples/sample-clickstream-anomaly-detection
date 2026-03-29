@@ -1398,8 +1398,8 @@ Resources:
           - - !Ref GlueDatabaseName
             - 'For forensic analysis of anomalies'
         Name: !Ref GlueDatabaseName
-  #Glue Iceberg Table
-  GlueTable1:
+  #Glue Iceberg Tables
+  BusinessConversionMetricsTable:
     Type: AWS::Glue::Table
     DependsOn:
       - MSFGlueDatabase
@@ -1408,26 +1408,85 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseName: !Ref MSFGlueDatabase
       TableInput:
-        Name: "clickstream_events"
+        Name: "business_conversion_metrics"
         StorageDescriptor:
           Columns:
-            - Name: "userid"
-              Type: "bigint"
-            - Name: "globalseq"
-              Type: "bigint"
-            - Name: "event_type"
+            - Name: "timestamp"
+              Type: "timestamp"
+            - Name: "metric_name"
               Type: "string"
-            - Name: "product_type"
+            - Name: "metric_value"
+              Type: "double"
+            - Name: "conversion_type"
               Type: "string"
-            - Name: "eventtimestamp"
-              Type: "bigint"
-            - Name: "prevglobalseq"
-              Type: "bigint"
-          Location: !Sub "s3://firehose-msk-lab-${AWS::AccountId}-target-bucket/iceberg/clickstream_events"
+            - Name: "channel"
+              Type: "string"
+          Location: !Sub "s3://firehose-msk-lab-${AWS::AccountId}-target-bucket/business-conversion-metrics/"
         TableType: "EXTERNAL_TABLE"
         Parameters:
-          format: "parquet"
-          write_compression: "zstd"
+          table_type: "ICEBERG"
+      OpenTableFormatInput:
+        IcebergInput:
+          MetadataOperation: "CREATE"
+          Version: "2"
+
+  BusinessHealthMetricsTable:
+    Type: AWS::Glue::Table
+    DependsOn:
+      - MSFGlueDatabase
+      - FirehoseTargetBucket
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref MSFGlueDatabase
+      TableInput:
+        Name: "business_health_metrics"
+        StorageDescriptor:
+          Columns:
+            - Name: "timestamp"
+              Type: "timestamp"
+            - Name: "metric_name"
+              Type: "string"
+            - Name: "metric_value"
+              Type: "double"
+            - Name: "service"
+              Type: "string"
+            - Name: "region"
+              Type: "string"
+          Location: !Sub "s3://firehose-msk-lab-${AWS::AccountId}-target-bucket/business-health-metrics/"
+        TableType: "EXTERNAL_TABLE"
+        Parameters:
+          table_type: "ICEBERG"
+      OpenTableFormatInput:
+        IcebergInput:
+          MetadataOperation: "CREATE"
+          Version: "2"
+
+  BusinessProductMetricsTable:
+    Type: AWS::Glue::Table
+    DependsOn:
+      - MSFGlueDatabase
+      - FirehoseTargetBucket
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref MSFGlueDatabase
+      TableInput:
+        Name: "business_product_metrics"
+        StorageDescriptor:
+          Columns:
+            - Name: "timestamp"
+              Type: "timestamp"
+            - Name: "metric_name"
+              Type: "string"
+            - Name: "metric_value"
+              Type: "double"
+            - Name: "product_id"
+              Type: "string"
+            - Name: "category"
+              Type: "string"
+          Location: !Sub "s3://firehose-msk-lab-${AWS::AccountId}-target-bucket/business-product-metrics/"
+        TableType: "EXTERNAL_TABLE"
+        Parameters:
+          table_type: "ICEBERG"
       OpenTableFormatInput:
         IcebergInput:
           MetadataOperation: "CREATE"
