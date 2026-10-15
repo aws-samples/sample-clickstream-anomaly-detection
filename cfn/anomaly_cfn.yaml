@@ -272,7 +272,8 @@ Resources:
               # Create dirs, get Apache Kafka 3.8.1 and unpack it
               su -c "mkdir -p kafka362" -s /bin/sh ec2-user
               cd kafka362
-              su -c "wget https://downloads.apache.org/kafka/3.8.1/kafka_2.12-3.8.1.tgz" -s /bin/sh ec2-user
+              su -c "wget https://archive.apache.org/dist/kafka/3.8.1/kafka_2.12-3.8.1.tgz" -s /bin/sh ec2-user
+              echo "72be5d3468901e0a1c5f3c6a678acb934a4cb8a3c08e9c452ea9e5fcee8b84f2f53eb9b5331d7b04d635aaf283e219c30d1b8afb56c9e74df7870fcbec424a86  kafka_2.12-3.8.1.tgz" | sha512sum -c - || exit 1
               su -c "tar -xzf kafka_2.12-3.8.1.tgz --strip 1" -s /bin/sh ec2-user
               cd /home/ec2-user
               ln -s /home/ec2-user/kafka362 /home/ec2-user/kafka
@@ -306,34 +307,8 @@ Resources:
               #### Validate
               /home/ec2-user/kafka/bin/kafka-topics.sh --list --bootstrap-server $MSKIAM_BOOTSTRAP --command-config /home/ec2-user/kafka/bin/client.properties >> /home/ec2-user/kafka/bin/topiclist.txt
 
-              cd /tmp
-              su -c "mkdir -p kafka" -s /bin/sh ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/producer.properties_msk /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/consumer.properties /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/jars/KafkaClickstreamClient-1.0-SNAPSHOT.jar /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/jars/KafkaClickstreamConsumer-1.0-SNAPSHOT.jar /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/jars/CustomMM2ReplicationPolicy-1.0-SNAPSHOT.jar /home/ec2-user/confluent/share/java/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/jars/MM2GroupOffsetSync-1.0-SNAPSHOT.jar /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/MSKLabs/schema-registry-ssl/schema-registry.properties /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/generatePropertiesFiles.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/generateStartupFile.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/AuthMSK-1.0-SNAPSHOT.jar /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/connect-distributed.properties /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/kafka-consumer-python.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/setup-env.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/setup-policy.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/GlobalSeqNo.py /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/mm2-msc.json /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/mm2-hbc.json /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/mm2-cpc.json /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/mm2-cpc-cust-repl-policy.json /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/mm2-msc-cust-repl-policy.json /tmp/kafka" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/kafka-connect.yml /home/ec2-user/prometheus" -l ec2-user
-              su -c "aws s3 cp s3://aws-streaming-artifacts/msk-lab-resources/kafka-producer-consumer.yml /home/ec2-user/prometheus" -l ec2-user
-
               #setup bash env
               su -c "echo 'export PS1=\"KafkaClientEC2Instance1 [\u@\h \W]$ \"' >> /home/ec2-user/.bash_profile" -s /bin/sh ec2-user
-              su -c "echo '[ -f /tmp/kafka/setup_env ] && . /tmp/kafka/setup_env' >> /home/ec2-user/.bash_profile" -s /bin/sh ec2-user
             - MSKBootstrapAddress: !GetAtt GetClusterDetails.IamBootstrapServers
   EC2Role:
     Type: AWS::IAM::Role
